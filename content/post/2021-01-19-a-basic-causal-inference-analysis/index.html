@@ -1,0 +1,1771 @@
+---
+title: A Basic Causal Analysis
+author: Mark Platts
+date: '2021-01-16'
+slug: a-basic-causal-analysis
+categories: []
+tags: []
+---
+
+<script src="{{< blogdown/postref >}}index_files/htmlwidgets/htmlwidgets.js"></script>
+<script src="{{< blogdown/postref >}}index_files/viz/viz.js"></script>
+<link href="{{< blogdown/postref >}}index_files/DiagrammeR-styles/styles.css" rel="stylesheet" />
+<script src="{{< blogdown/postref >}}index_files/grViz-binding/grViz.js"></script>
+
+
+<p>Causal inference is a set of methods used to predict what will happen to an outcome when we change an input variable. In this post I will demonstrate how it can be used to solve a simple problem. I’ll introduce you to some foundational causal inference methods and by following along you’ll gain intuition into why correlation between two variables can be a poor estimate of the causal effect. I’ve stripped back the complexity to make the the core features of the analysis obvious, but in the real world causal inference is usually much more involved.</p>
+<div id="a-simple-reason-for-bias-common-cause" class="section level1">
+<h1>A simple reason for bias: common cause</h1>
+<p>Associations between two variables are often biased estimates of the causal effect. There are many reasons for this, but perhaps the most typical is that the variables of interest have a common cause. We will use causal inference to estimate a drugs effect on a persons health where a person’s health risk is a common cause. More specifically, people with a high health risk are more likely to be prescribed the drug and at the same time have a worse health score than people with a low health risk. We can represent this common cause dynamic with a directed acyclic graph (DAG):</p>
+<div id="htmlwidget-1" style="width:672px;height:480px;" class="grViz html-widget"></div>
+<script type="application/json" data-for="htmlwidget-1">{"x":{"diagram":"\n      digraph boxes_and_circles {\n      node [shape = circle,\n            fontname = Helvetica,\n            penwidth = 2.0]\n      Risk; Treatment; Health\n      #add edges\n      Risk->Treatment [fontname = Helvetica]\n      Risk->Health [fontname = Helvetica]\n      Treatment->Health [fontname = Helvetica]\n      }\n      ","config":{"engine":"dot","options":null}},"evals":[],"jsHooks":[]}</script>
+<p>The probabilities of a person being in each health risk level and the probability of being prescribed the drug given their risk level are indicated in the following probability tree:</p>
+<div id="htmlwidget-2" style="width:672px;height:480px;" class="grViz html-widget"></div>
+<script type="application/json" data-for="htmlwidget-2">{"x":{"diagram":"\n      digraph boxes_and_circles {\n      node [shape = circle,\n            fontname = Helvetica,\n            penwidth = 2.0]\n      Individual; \n      High_Risk; Low_Risk \n      Prescribed; Not_Prescribed\n      Prescribed_;Not_Prescribed_\n      #add edges\n      Individual->High_Risk [label = \" 0.2\", fontname = Helvetica]\n      Individual->Low_Risk [label = \"0.8\", fontname = Helvetica]\n      High_Risk->Not_Prescribed [label = \"  0.1\", fontname = Helvetica]\n      High_Risk->Prescribed [label = \" 0.9\", fontname = Helvetica]\n      Low_Risk->Not_Prescribed_ [label = \" 0.9\", fontname = Helvetica]\n      Low_Risk->Prescribed_ [label = \"  0.1\", fontname = Helvetica]\n      }\n      ","config":{"engine":"dot","options":null}},"evals":[],"jsHooks":[]}</script>
+<p>Finally the health scores given their health risk level and whether they were prescribed the drug are:</p>
+<style>html {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', 'Fira Sans', 'Droid Sans', Arial, sans-serif;
+}
+
+#jwfpsyznlw .gt_table {
+  display: table;
+  border-collapse: collapse;
+  margin-left: auto;
+  margin-right: auto;
+  color: #333333;
+  font-size: 16px;
+  font-weight: normal;
+  font-style: normal;
+  background-color: #FFFFFF;
+  width: auto;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #A8A8A8;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #A8A8A8;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+}
+
+#jwfpsyznlw .gt_heading {
+  background-color: #FFFFFF;
+  text-align: center;
+  border-bottom-color: #FFFFFF;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+}
+
+#jwfpsyznlw .gt_title {
+  color: #333333;
+  font-size: 125%;
+  font-weight: initial;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  border-bottom-color: #FFFFFF;
+  border-bottom-width: 0;
+}
+
+#jwfpsyznlw .gt_subtitle {
+  color: #333333;
+  font-size: 85%;
+  font-weight: initial;
+  padding-top: 0;
+  padding-bottom: 4px;
+  border-top-color: #FFFFFF;
+  border-top-width: 0;
+}
+
+#jwfpsyznlw .gt_bottom_border {
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+}
+
+#jwfpsyznlw .gt_col_headings {
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+}
+
+#jwfpsyznlw .gt_col_heading {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: normal;
+  text-transform: inherit;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: bottom;
+  padding-top: 5px;
+  padding-bottom: 6px;
+  padding-left: 5px;
+  padding-right: 5px;
+  overflow-x: hidden;
+}
+
+#jwfpsyznlw .gt_column_spanner_outer {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: normal;
+  text-transform: inherit;
+  padding-top: 0;
+  padding-bottom: 0;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+#jwfpsyznlw .gt_column_spanner_outer:first-child {
+  padding-left: 0;
+}
+
+#jwfpsyznlw .gt_column_spanner_outer:last-child {
+  padding-right: 0;
+}
+
+#jwfpsyznlw .gt_column_spanner {
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  vertical-align: bottom;
+  padding-top: 5px;
+  padding-bottom: 6px;
+  overflow-x: hidden;
+  display: inline-block;
+  width: 100%;
+}
+
+#jwfpsyznlw .gt_group_heading {
+  padding: 8px;
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  text-transform: inherit;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: middle;
+}
+
+#jwfpsyznlw .gt_empty_group_heading {
+  padding: 0.5px;
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  vertical-align: middle;
+}
+
+#jwfpsyznlw .gt_from_md > :first-child {
+  margin-top: 0;
+}
+
+#jwfpsyznlw .gt_from_md > :last-child {
+  margin-bottom: 0;
+}
+
+#jwfpsyznlw .gt_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  margin: 10px;
+  border-top-style: solid;
+  border-top-width: 1px;
+  border-top-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: middle;
+  overflow-x: hidden;
+}
+
+#jwfpsyznlw .gt_stub {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  text-transform: inherit;
+  border-right-style: solid;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+  padding-left: 12px;
+}
+
+#jwfpsyznlw .gt_summary_row {
+  color: #333333;
+  background-color: #FFFFFF;
+  text-transform: inherit;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#jwfpsyznlw .gt_first_summary_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+}
+
+#jwfpsyznlw .gt_grand_summary_row {
+  color: #333333;
+  background-color: #FFFFFF;
+  text-transform: inherit;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#jwfpsyznlw .gt_first_grand_summary_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-top-style: double;
+  border-top-width: 6px;
+  border-top-color: #D3D3D3;
+}
+
+#jwfpsyznlw .gt_striped {
+  background-color: rgba(128, 128, 128, 0.05);
+}
+
+#jwfpsyznlw .gt_table_body {
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+}
+
+#jwfpsyznlw .gt_footnotes {
+  color: #333333;
+  background-color: #FFFFFF;
+  border-bottom-style: none;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+}
+
+#jwfpsyznlw .gt_footnote {
+  margin: 0px;
+  font-size: 90%;
+  padding: 4px;
+}
+
+#jwfpsyznlw .gt_sourcenotes {
+  color: #333333;
+  background-color: #FFFFFF;
+  border-bottom-style: none;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+}
+
+#jwfpsyznlw .gt_sourcenote {
+  font-size: 90%;
+  padding: 4px;
+}
+
+#jwfpsyznlw .gt_left {
+  text-align: left;
+}
+
+#jwfpsyznlw .gt_center {
+  text-align: center;
+}
+
+#jwfpsyznlw .gt_right {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+#jwfpsyznlw .gt_font_normal {
+  font-weight: normal;
+}
+
+#jwfpsyznlw .gt_font_bold {
+  font-weight: bold;
+}
+
+#jwfpsyznlw .gt_font_italic {
+  font-style: italic;
+}
+
+#jwfpsyznlw .gt_super {
+  font-size: 65%;
+}
+
+#jwfpsyznlw .gt_footnote_marks {
+  font-style: italic;
+  font-size: 65%;
+}
+</style>
+<div id="jwfpsyznlw" style="overflow-x:auto;overflow-y:auto;width:auto;height:auto;"><table class="gt_table">
+  
+  <thead class="gt_col_headings">
+    <tr>
+      <th class="gt_col_heading gt_columns_bottom_border gt_left" rowspan="1" colspan="1">health_risk</th>
+      <th class="gt_col_heading gt_columns_bottom_border gt_left" rowspan="1" colspan="1">treatment</th>
+      <th class="gt_col_heading gt_columns_bottom_border gt_right" rowspan="1" colspan="1">health_score</th>
+    </tr>
+  </thead>
+  <tbody class="gt_table_body">
+    <tr>
+      <td class="gt_row gt_left">high_risk</td>
+      <td class="gt_row gt_left">prescribed_drug</td>
+      <td class="gt_row gt_right">20</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">high_risk</td>
+      <td class="gt_row gt_left">no_treatment</td>
+      <td class="gt_row gt_right">10</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">low_risk</td>
+      <td class="gt_row gt_left">prescribed_drug</td>
+      <td class="gt_row gt_right">90</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">low_risk</td>
+      <td class="gt_row gt_left">no_treatment</td>
+      <td class="gt_row gt_right">80</td>
+    </tr>
+  </tbody>
+  
+  
+</table></div>
+<p>Notice that within each health risk level the drug improves the health score by 10. To simplify our calculations the average causal effect is identical in both health risk levels. Later we will explore a situation where the effects are different.</p>
+</div>
+<div id="generating-synthetic-data" class="section level1">
+<h1>Generating synthetic data</h1>
+<p>We are going to use synthetic data which will help you to understand how bias is created, as well as enable us to check whether our causal effect estimates are correct. Initially we will go through this in a manual step-by-step manner to generate the data for one person. Afterward we will automate this process to generate the data set to analyze.</p>
+<div id="sampling-the-data-for-one-person" class="section level2">
+<h2>Sampling the data for one person</h2>
+<p>The first thing we need to know about a person is whether they are a high or low health risk individual. Given that the probability of being high health risk is 0.2 we can sample their health risk level as follows:</p>
+<pre class="r"><code>set.seed(1)
+sampled_health_risk &lt;- if_else(runif(1)&lt;=0.2, 
+                        &quot;high_risk&quot;, 
+                        &quot;low_risk&quot;)
+
+sampled_health_risk</code></pre>
+<pre><code>## [1] &quot;low_risk&quot;</code></pre>
+<p>Now we know that the persons health risk is low_risk, the next thing we need to know is whether they are prescribed the drug. Given the person is low_risk the probability of being prescribed the drug is 0.1. Let’s use this to sample whether the person is prescribed the drug or not:</p>
+<pre class="r"><code>set.seed(123)
+sampled_treatment = if_else(runif(1)&lt;=0.1, 
+                          &quot;prescribed_drug&quot;, 
+                          &quot;no_treatment&quot;)
+
+sampled_treatment</code></pre>
+<pre><code>## [1] &quot;no_treatment&quot;</code></pre>
+<p>The final step is to determine their health score given that we know their health risk is low_risk and their treatment is no_treatment. We can read this directly from the table above:</p>
+<pre class="r"><code>sampled_health_score &lt;- df_health_scores %&gt;% 
+  filter(
+    health_risk == sampled_health_risk &amp; treatment == sampled_treatment) %&gt;% 
+  pull(health_score)
+
+sampled_health_score</code></pre>
+<pre><code>## [1] 80</code></pre>
+<p>In the real world there would usually be some random variability in the health_score, but for simplicity I have omitted this.</p>
+<p>So there we have it. We have synthetically produced one line of data for our data frame:</p>
+<style>html {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', 'Fira Sans', 'Droid Sans', Arial, sans-serif;
+}
+
+#osncjrvket .gt_table {
+  display: table;
+  border-collapse: collapse;
+  margin-left: auto;
+  margin-right: auto;
+  color: #333333;
+  font-size: 16px;
+  font-weight: normal;
+  font-style: normal;
+  background-color: #FFFFFF;
+  width: auto;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #A8A8A8;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #A8A8A8;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+}
+
+#osncjrvket .gt_heading {
+  background-color: #FFFFFF;
+  text-align: center;
+  border-bottom-color: #FFFFFF;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+}
+
+#osncjrvket .gt_title {
+  color: #333333;
+  font-size: 125%;
+  font-weight: initial;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  border-bottom-color: #FFFFFF;
+  border-bottom-width: 0;
+}
+
+#osncjrvket .gt_subtitle {
+  color: #333333;
+  font-size: 85%;
+  font-weight: initial;
+  padding-top: 0;
+  padding-bottom: 4px;
+  border-top-color: #FFFFFF;
+  border-top-width: 0;
+}
+
+#osncjrvket .gt_bottom_border {
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+}
+
+#osncjrvket .gt_col_headings {
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+}
+
+#osncjrvket .gt_col_heading {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: normal;
+  text-transform: inherit;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: bottom;
+  padding-top: 5px;
+  padding-bottom: 6px;
+  padding-left: 5px;
+  padding-right: 5px;
+  overflow-x: hidden;
+}
+
+#osncjrvket .gt_column_spanner_outer {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: normal;
+  text-transform: inherit;
+  padding-top: 0;
+  padding-bottom: 0;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+#osncjrvket .gt_column_spanner_outer:first-child {
+  padding-left: 0;
+}
+
+#osncjrvket .gt_column_spanner_outer:last-child {
+  padding-right: 0;
+}
+
+#osncjrvket .gt_column_spanner {
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  vertical-align: bottom;
+  padding-top: 5px;
+  padding-bottom: 6px;
+  overflow-x: hidden;
+  display: inline-block;
+  width: 100%;
+}
+
+#osncjrvket .gt_group_heading {
+  padding: 8px;
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  text-transform: inherit;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: middle;
+}
+
+#osncjrvket .gt_empty_group_heading {
+  padding: 0.5px;
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  vertical-align: middle;
+}
+
+#osncjrvket .gt_from_md > :first-child {
+  margin-top: 0;
+}
+
+#osncjrvket .gt_from_md > :last-child {
+  margin-bottom: 0;
+}
+
+#osncjrvket .gt_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  margin: 10px;
+  border-top-style: solid;
+  border-top-width: 1px;
+  border-top-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: middle;
+  overflow-x: hidden;
+}
+
+#osncjrvket .gt_stub {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  text-transform: inherit;
+  border-right-style: solid;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+  padding-left: 12px;
+}
+
+#osncjrvket .gt_summary_row {
+  color: #333333;
+  background-color: #FFFFFF;
+  text-transform: inherit;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#osncjrvket .gt_first_summary_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+}
+
+#osncjrvket .gt_grand_summary_row {
+  color: #333333;
+  background-color: #FFFFFF;
+  text-transform: inherit;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#osncjrvket .gt_first_grand_summary_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-top-style: double;
+  border-top-width: 6px;
+  border-top-color: #D3D3D3;
+}
+
+#osncjrvket .gt_striped {
+  background-color: rgba(128, 128, 128, 0.05);
+}
+
+#osncjrvket .gt_table_body {
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+}
+
+#osncjrvket .gt_footnotes {
+  color: #333333;
+  background-color: #FFFFFF;
+  border-bottom-style: none;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+}
+
+#osncjrvket .gt_footnote {
+  margin: 0px;
+  font-size: 90%;
+  padding: 4px;
+}
+
+#osncjrvket .gt_sourcenotes {
+  color: #333333;
+  background-color: #FFFFFF;
+  border-bottom-style: none;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+}
+
+#osncjrvket .gt_sourcenote {
+  font-size: 90%;
+  padding: 4px;
+}
+
+#osncjrvket .gt_left {
+  text-align: left;
+}
+
+#osncjrvket .gt_center {
+  text-align: center;
+}
+
+#osncjrvket .gt_right {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+#osncjrvket .gt_font_normal {
+  font-weight: normal;
+}
+
+#osncjrvket .gt_font_bold {
+  font-weight: bold;
+}
+
+#osncjrvket .gt_font_italic {
+  font-style: italic;
+}
+
+#osncjrvket .gt_super {
+  font-size: 65%;
+}
+
+#osncjrvket .gt_footnote_marks {
+  font-style: italic;
+  font-size: 65%;
+}
+</style>
+<div id="osncjrvket" style="overflow-x:auto;overflow-y:auto;width:auto;height:auto;"><table class="gt_table">
+  
+  <thead class="gt_col_headings">
+    <tr>
+      <th class="gt_col_heading gt_columns_bottom_border gt_left" rowspan="1" colspan="1">risk_level</th>
+      <th class="gt_col_heading gt_columns_bottom_border gt_left" rowspan="1" colspan="1">treatment</th>
+      <th class="gt_col_heading gt_columns_bottom_border gt_right" rowspan="1" colspan="1">health_score</th>
+    </tr>
+  </thead>
+  <tbody class="gt_table_body">
+    <tr>
+      <td class="gt_row gt_left">low_risk</td>
+      <td class="gt_row gt_left">no_treatment</td>
+      <td class="gt_row gt_right">80</td>
+    </tr>
+  </tbody>
+  
+  
+</table></div>
+</div>
+<div id="synthetically-creating-the-entire-dataset" class="section level2">
+<h2>Synthetically creating the entire dataset</h2>
+<p>All we need to do is automate this process to create a complete data set that we can use for our analysis.</p>
+<pre class="r"><code>simulate_one_person_continuous &lt;- function(x) {
+  
+  prob_low_risk = 0.8
+  
+  prob_no_prescription_if_high_risk = 0.1
+  prob_no_prescription_if_low_risk = 0.9
+  
+  health_score_if_treated_by_no_prescription_and_high_risk = 10
+  health_score_if_treated_by_drug_and_high_risk = 20
+  
+  health_score_if_treated_by_no_prescription_and_low_risk = 80
+  health_score_if_treated_by_drug_and_low_risk = 90
+  
+  
+  health_risk &lt;- if_else(runif(1)&gt;prob_low_risk, &quot;high_risk&quot;, &quot;low_risk&quot;)
+  
+  random_number &lt;- runif(1)
+  treatment &lt;- ifelse(health_risk == &quot;high_risk&quot;,
+                         if_else(random_number&gt;prob_no_prescription_if_high_risk, &quot;prescribed_drug&quot;, &quot;no_treatment&quot;),
+      if_else(random_number&gt;prob_no_prescription_if_low_risk, &quot;prescribed_drug&quot;, &quot;no_treatment&quot;)
+  )
+  
+  ran_death &lt;- runif(1)
+  
+  if(treatment == &quot;no_treatment&quot; &amp; health_risk == &quot;high_risk&quot;) {
+    health_score = health_score_if_treated_by_no_prescription_and_high_risk
+  } else if(treatment == &quot;no_treatment&quot; &amp; health_risk == &quot;low_risk&quot;){
+    health_score = health_score_if_treated_by_no_prescription_and_low_risk
+  } else if(treatment == &quot;prescribed_drug&quot; &amp; health_risk == &quot;high_risk&quot;) {
+    health_score = health_score_if_treated_by_drug_and_high_risk
+  } else {
+    health_score = health_score_if_treated_by_drug_and_low_risk
+  }
+  
+  tibble(
+    health_risk = health_risk,
+    treatment = treatment,
+    health_score = health_score)
+}
+
+data_fab &lt;- map_dfr(.x = 1:1000, .f = simulate_one_person_continuous)
+
+data_fab &lt;- data_fab %&gt;% mutate_if(is.character, ~as.factor(.))</code></pre>
+<p>Here is a sample of the data created:</p>
+<style>html {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', 'Fira Sans', 'Droid Sans', Arial, sans-serif;
+}
+
+#wsoxbjutfw .gt_table {
+  display: table;
+  border-collapse: collapse;
+  margin-left: auto;
+  margin-right: auto;
+  color: #333333;
+  font-size: 16px;
+  font-weight: normal;
+  font-style: normal;
+  background-color: #FFFFFF;
+  width: auto;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #A8A8A8;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #A8A8A8;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+}
+
+#wsoxbjutfw .gt_heading {
+  background-color: #FFFFFF;
+  text-align: center;
+  border-bottom-color: #FFFFFF;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+}
+
+#wsoxbjutfw .gt_title {
+  color: #333333;
+  font-size: 125%;
+  font-weight: initial;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  border-bottom-color: #FFFFFF;
+  border-bottom-width: 0;
+}
+
+#wsoxbjutfw .gt_subtitle {
+  color: #333333;
+  font-size: 85%;
+  font-weight: initial;
+  padding-top: 0;
+  padding-bottom: 4px;
+  border-top-color: #FFFFFF;
+  border-top-width: 0;
+}
+
+#wsoxbjutfw .gt_bottom_border {
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+}
+
+#wsoxbjutfw .gt_col_headings {
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+}
+
+#wsoxbjutfw .gt_col_heading {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: normal;
+  text-transform: inherit;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: bottom;
+  padding-top: 5px;
+  padding-bottom: 6px;
+  padding-left: 5px;
+  padding-right: 5px;
+  overflow-x: hidden;
+}
+
+#wsoxbjutfw .gt_column_spanner_outer {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: normal;
+  text-transform: inherit;
+  padding-top: 0;
+  padding-bottom: 0;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+#wsoxbjutfw .gt_column_spanner_outer:first-child {
+  padding-left: 0;
+}
+
+#wsoxbjutfw .gt_column_spanner_outer:last-child {
+  padding-right: 0;
+}
+
+#wsoxbjutfw .gt_column_spanner {
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  vertical-align: bottom;
+  padding-top: 5px;
+  padding-bottom: 6px;
+  overflow-x: hidden;
+  display: inline-block;
+  width: 100%;
+}
+
+#wsoxbjutfw .gt_group_heading {
+  padding: 8px;
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  text-transform: inherit;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: middle;
+}
+
+#wsoxbjutfw .gt_empty_group_heading {
+  padding: 0.5px;
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  vertical-align: middle;
+}
+
+#wsoxbjutfw .gt_from_md > :first-child {
+  margin-top: 0;
+}
+
+#wsoxbjutfw .gt_from_md > :last-child {
+  margin-bottom: 0;
+}
+
+#wsoxbjutfw .gt_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  margin: 10px;
+  border-top-style: solid;
+  border-top-width: 1px;
+  border-top-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: middle;
+  overflow-x: hidden;
+}
+
+#wsoxbjutfw .gt_stub {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  text-transform: inherit;
+  border-right-style: solid;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+  padding-left: 12px;
+}
+
+#wsoxbjutfw .gt_summary_row {
+  color: #333333;
+  background-color: #FFFFFF;
+  text-transform: inherit;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#wsoxbjutfw .gt_first_summary_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+}
+
+#wsoxbjutfw .gt_grand_summary_row {
+  color: #333333;
+  background-color: #FFFFFF;
+  text-transform: inherit;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#wsoxbjutfw .gt_first_grand_summary_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-top-style: double;
+  border-top-width: 6px;
+  border-top-color: #D3D3D3;
+}
+
+#wsoxbjutfw .gt_striped {
+  background-color: rgba(128, 128, 128, 0.05);
+}
+
+#wsoxbjutfw .gt_table_body {
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+}
+
+#wsoxbjutfw .gt_footnotes {
+  color: #333333;
+  background-color: #FFFFFF;
+  border-bottom-style: none;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+}
+
+#wsoxbjutfw .gt_footnote {
+  margin: 0px;
+  font-size: 90%;
+  padding: 4px;
+}
+
+#wsoxbjutfw .gt_sourcenotes {
+  color: #333333;
+  background-color: #FFFFFF;
+  border-bottom-style: none;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+}
+
+#wsoxbjutfw .gt_sourcenote {
+  font-size: 90%;
+  padding: 4px;
+}
+
+#wsoxbjutfw .gt_left {
+  text-align: left;
+}
+
+#wsoxbjutfw .gt_center {
+  text-align: center;
+}
+
+#wsoxbjutfw .gt_right {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+#wsoxbjutfw .gt_font_normal {
+  font-weight: normal;
+}
+
+#wsoxbjutfw .gt_font_bold {
+  font-weight: bold;
+}
+
+#wsoxbjutfw .gt_font_italic {
+  font-style: italic;
+}
+
+#wsoxbjutfw .gt_super {
+  font-size: 65%;
+}
+
+#wsoxbjutfw .gt_footnote_marks {
+  font-style: italic;
+  font-size: 65%;
+}
+</style>
+<div id="wsoxbjutfw" style="overflow-x:auto;overflow-y:auto;width:auto;height:auto;"><table class="gt_table">
+  
+  <thead class="gt_col_headings">
+    <tr>
+      <th class="gt_col_heading gt_columns_bottom_border gt_center" rowspan="1" colspan="1">health_risk</th>
+      <th class="gt_col_heading gt_columns_bottom_border gt_center" rowspan="1" colspan="1">treatment</th>
+      <th class="gt_col_heading gt_columns_bottom_border gt_right" rowspan="1" colspan="1">health_score</th>
+    </tr>
+  </thead>
+  <tbody class="gt_table_body">
+    <tr>
+      <td class="gt_row gt_center">low_risk</td>
+      <td class="gt_row gt_center">no_treatment</td>
+      <td class="gt_row gt_right">80</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_center">low_risk</td>
+      <td class="gt_row gt_center">no_treatment</td>
+      <td class="gt_row gt_right">80</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_center">low_risk</td>
+      <td class="gt_row gt_center">no_treatment</td>
+      <td class="gt_row gt_right">80</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_center">high_risk</td>
+      <td class="gt_row gt_center">prescribed_drug</td>
+      <td class="gt_row gt_right">20</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_center">high_risk</td>
+      <td class="gt_row gt_center">prescribed_drug</td>
+      <td class="gt_row gt_right">20</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_center">low_risk</td>
+      <td class="gt_row gt_center">no_treatment</td>
+      <td class="gt_row gt_right">80</td>
+    </tr>
+  </tbody>
+  
+  
+</table></div>
+</div>
+</div>
+<div id="calculating-a-naive-estimate" class="section level1">
+<h1>Calculating a naive estimate</h1>
+<p>Let’s calculate the difference in the health score between those that are and aren’t prescribed the drug.</p>
+<pre class="r"><code>lm(health_score~treatment, data_fab)</code></pre>
+<pre><code>## 
+## Call:
+## lm(formula = health_score ~ treatment, data = data_fab)
+## 
+## Coefficients:
+##              (Intercept)  treatmentprescribed_drug  
+##                    77.69                    -36.74</code></pre>
+<p>People who take the drug have a worse health score. It would be a mistake to assume that this means the drug has a negative impact. In fact we know that the drug improves a persons health score by 10. The problem here is that we aren’t comparing apples with apples. The people receiving the drug are generally higher risk than the people who aren’t. This means the average of the people treated is affected not only by the treatment but also by the general risk level of the people who are treated. Because the health risk level has such a strong effect on the health score in comparison to the treatment it means the naive estimate is the reverse of the actual causal effect. This could have serious implications. Actions taken based on the association between two variables could lead us to a worse action than doing nothing at all. In our example if we were to stop prescribing the drug, everyone would have worse health.</p>
+</div>
+<div id="plotting-the-data" class="section level1">
+<h1>Plotting the data</h1>
+<p>Let’s look at some histograms showing the distribution of health scores for each treatment to make this point clearer. Here is a histogram of the health scores for no treatment and prescribed drug, with a red line indicating the mean health score:</p>
+<p><img src="{{< blogdown/postref >}}index_files/figure-html/unnamed-chunk-13-1.png" width="672" /></p>
+<p>Notice that no treatment has a far higher mean health score. However, let’s look at what happens if we use color to show the risk levels:</p>
+<p><img src="{{< blogdown/postref >}}index_files/figure-html/unnamed-chunk-14-1.png" width="672" /></p>
+<p>Within each risk level we can see that prescribing the drug actually increases the health score. This is known as the Simpson’s Paradox which happens when a simple aggregated mean difference is the reverse of the causal effect.</p>
+</div>
+<div id="causal-inference" class="section level1">
+<h1>Causal inference</h1>
+<p>In our circumstance we have an easy solution. By including health_risk as a factor in the linear regression model we correct for the bias:</p>
+<pre class="r"><code>lm(health_score~health_risk + treatment, data_fab)</code></pre>
+<pre><code>## 
+## Call:
+## lm(formula = health_score ~ health_risk + treatment, data = data_fab)
+## 
+## Coefficients:
+##              (Intercept)       health_risklow_risk  treatmentprescribed_drug  
+##                       10                        70                        10</code></pre>
+<p>Notice that the treatment prescribed_drug coefficient is 10, which is exactly the value we used to generate the data.</p>
+</div>
+<div id="heterogeneous-treatment-effects" class="section level1">
+<h1>Heterogeneous treatment effects</h1>
+<p>While still keeping things as simple as possible, let’s slightly complicate the above analysis by making the average treatment effect in the low risk different from the high risk. This will be a nice introduction to the techniques that are applied in more complicated situations.</p>
+<p>By setting the health score for high risk patients to 10 when not prescribed and 40 when prescribed we are setting the drug to have a 30 improvement in the health score for high risk patients. In addition, by setting the health score for low risk patients to 80 when not prescribed and 90 when prescribed, we are setting the drug to have a 10 improvement in health score in low risk patients.</p>
+<pre class="r"><code>simulate_one_person_continuous &lt;- function(x) {
+  
+  prob_low_risk = 0.8
+  
+  prob_no_prescription_if_high_risk = 0.1
+  prob_no_prescription_if_low_risk = 0.9
+  
+  health_score_if_treated_by_no_prescription_and_high_risk = 10
+  health_score_if_treated_by_drug_and_high_risk = 40
+  
+  health_score_if_treated_by_no_prescription_and_low_risk = 80
+  health_score_if_treated_by_drug_and_low_risk = 90
+  
+  
+  health_risk &lt;- if_else(runif(1)&gt;prob_low_risk, &quot;high_risk&quot;, &quot;low_risk&quot;)
+  
+  random_number &lt;- runif(1)
+  treatment &lt;- ifelse(health_risk == &quot;high_risk&quot;,
+                         if_else(random_number&gt;prob_no_prescription_if_high_risk, &quot;prescribed_drug&quot;, &quot;no_treatment&quot;),
+      if_else(random_number&gt;prob_no_prescription_if_low_risk, &quot;prescribed_drug&quot;, &quot;no_treatment&quot;)
+  )
+  
+  ran_death &lt;- runif(1)
+  
+  if(treatment == &quot;no_treatment&quot; &amp; health_risk == &quot;high_risk&quot;) {
+    health_score = health_score_if_treated_by_no_prescription_and_high_risk
+  } else if(treatment == &quot;no_treatment&quot; &amp; health_risk == &quot;low_risk&quot;){
+    health_score = health_score_if_treated_by_no_prescription_and_low_risk
+  } else if(treatment == &quot;prescribed_drug&quot; &amp; health_risk == &quot;high_risk&quot;) {
+    health_score = health_score_if_treated_by_drug_and_high_risk
+  } else {
+    health_score = health_score_if_treated_by_drug_and_low_risk
+  }
+  
+  tibble(
+    health_risk = health_risk,
+    treatment = treatment,
+    health_score = health_score)
+}
+
+data_fab &lt;- map_dfr(.x = 1:1000, .f = simulate_one_person_continuous)
+
+data_fab &lt;- data_fab %&gt;% mutate_if(is.character, ~as.factor(.))
+
+data_fab %&gt;% head()</code></pre>
+<pre><code>## # A tibble: 6 x 3
+##   health_risk treatment       health_score
+##   &lt;fct&gt;       &lt;fct&gt;                  &lt;dbl&gt;
+## 1 low_risk    no_treatment              80
+## 2 high_risk   prescribed_drug           40
+## 3 low_risk    prescribed_drug           90
+## 4 low_risk    no_treatment              80
+## 5 low_risk    no_treatment              80
+## 6 low_risk    no_treatment              80</code></pre>
+<p>By including an interaction term for the treatment and the sickness level we can calculate the effect in each stratification of risk level:</p>
+<pre class="r"><code>lm(health_score~health_risk*treatment, data_fab)</code></pre>
+<pre><code>## 
+## Call:
+## lm(formula = health_score ~ health_risk * treatment, data = data_fab)
+## 
+## Coefficients:
+##                                  (Intercept)  
+##                                           10  
+##                          health_risklow_risk  
+##                                           70  
+##                     treatmentprescribed_drug  
+##                                           30  
+## health_risklow_risk:treatmentprescribed_drug  
+##                                          -20</code></pre>
+<p>Now we see that there is a different causal effect for each risk level. If a prescribed the drug and high risk the effect on the health score is 30. If the person is low risk 20 is deducted from this leaving an increase in health score of 10. We know this is correct because this is what we used to generate the data.</p>
+<p>If we want to know the difference between treating everyone and treating no one, two alternative approaches could be used, IP weighting and standardization. Each approach depend on different assumptions, making it good practice to apply both to test the robustness of these assumptions and validate the results. We will start with standardization because it is the most intuitive.</p>
+</div>
+<div id="standardization" class="section level1">
+<h1>Standardization</h1>
+<p>In standardization we are taking a weighted average of the causal effects in each stratification. The weights are the probability of a patient being in each stratification. In our case this is the probability of a person being high or low risk, which we can calculate empirically as the proportion of people in each stratification.</p>
+<style>html {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', 'Fira Sans', 'Droid Sans', Arial, sans-serif;
+}
+
+#iarqiscgxl .gt_table {
+  display: table;
+  border-collapse: collapse;
+  margin-left: auto;
+  margin-right: auto;
+  color: #333333;
+  font-size: 16px;
+  font-weight: normal;
+  font-style: normal;
+  background-color: #FFFFFF;
+  width: auto;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #A8A8A8;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #A8A8A8;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+}
+
+#iarqiscgxl .gt_heading {
+  background-color: #FFFFFF;
+  text-align: center;
+  border-bottom-color: #FFFFFF;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+}
+
+#iarqiscgxl .gt_title {
+  color: #333333;
+  font-size: 125%;
+  font-weight: initial;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  border-bottom-color: #FFFFFF;
+  border-bottom-width: 0;
+}
+
+#iarqiscgxl .gt_subtitle {
+  color: #333333;
+  font-size: 85%;
+  font-weight: initial;
+  padding-top: 0;
+  padding-bottom: 4px;
+  border-top-color: #FFFFFF;
+  border-top-width: 0;
+}
+
+#iarqiscgxl .gt_bottom_border {
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+}
+
+#iarqiscgxl .gt_col_headings {
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+}
+
+#iarqiscgxl .gt_col_heading {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: normal;
+  text-transform: inherit;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: bottom;
+  padding-top: 5px;
+  padding-bottom: 6px;
+  padding-left: 5px;
+  padding-right: 5px;
+  overflow-x: hidden;
+}
+
+#iarqiscgxl .gt_column_spanner_outer {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: normal;
+  text-transform: inherit;
+  padding-top: 0;
+  padding-bottom: 0;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+#iarqiscgxl .gt_column_spanner_outer:first-child {
+  padding-left: 0;
+}
+
+#iarqiscgxl .gt_column_spanner_outer:last-child {
+  padding-right: 0;
+}
+
+#iarqiscgxl .gt_column_spanner {
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  vertical-align: bottom;
+  padding-top: 5px;
+  padding-bottom: 6px;
+  overflow-x: hidden;
+  display: inline-block;
+  width: 100%;
+}
+
+#iarqiscgxl .gt_group_heading {
+  padding: 8px;
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  text-transform: inherit;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: middle;
+}
+
+#iarqiscgxl .gt_empty_group_heading {
+  padding: 0.5px;
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  vertical-align: middle;
+}
+
+#iarqiscgxl .gt_from_md > :first-child {
+  margin-top: 0;
+}
+
+#iarqiscgxl .gt_from_md > :last-child {
+  margin-bottom: 0;
+}
+
+#iarqiscgxl .gt_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  margin: 10px;
+  border-top-style: solid;
+  border-top-width: 1px;
+  border-top-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: middle;
+  overflow-x: hidden;
+}
+
+#iarqiscgxl .gt_stub {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  text-transform: inherit;
+  border-right-style: solid;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+  padding-left: 12px;
+}
+
+#iarqiscgxl .gt_summary_row {
+  color: #333333;
+  background-color: #FFFFFF;
+  text-transform: inherit;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#iarqiscgxl .gt_first_summary_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+}
+
+#iarqiscgxl .gt_grand_summary_row {
+  color: #333333;
+  background-color: #FFFFFF;
+  text-transform: inherit;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#iarqiscgxl .gt_first_grand_summary_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-top-style: double;
+  border-top-width: 6px;
+  border-top-color: #D3D3D3;
+}
+
+#iarqiscgxl .gt_striped {
+  background-color: rgba(128, 128, 128, 0.05);
+}
+
+#iarqiscgxl .gt_table_body {
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+}
+
+#iarqiscgxl .gt_footnotes {
+  color: #333333;
+  background-color: #FFFFFF;
+  border-bottom-style: none;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+}
+
+#iarqiscgxl .gt_footnote {
+  margin: 0px;
+  font-size: 90%;
+  padding: 4px;
+}
+
+#iarqiscgxl .gt_sourcenotes {
+  color: #333333;
+  background-color: #FFFFFF;
+  border-bottom-style: none;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+}
+
+#iarqiscgxl .gt_sourcenote {
+  font-size: 90%;
+  padding: 4px;
+}
+
+#iarqiscgxl .gt_left {
+  text-align: left;
+}
+
+#iarqiscgxl .gt_center {
+  text-align: center;
+}
+
+#iarqiscgxl .gt_right {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+#iarqiscgxl .gt_font_normal {
+  font-weight: normal;
+}
+
+#iarqiscgxl .gt_font_bold {
+  font-weight: bold;
+}
+
+#iarqiscgxl .gt_font_italic {
+  font-style: italic;
+}
+
+#iarqiscgxl .gt_super {
+  font-size: 65%;
+}
+
+#iarqiscgxl .gt_footnote_marks {
+  font-style: italic;
+  font-size: 65%;
+}
+</style>
+<div id="iarqiscgxl" style="overflow-x:auto;overflow-y:auto;width:auto;height:auto;"><table class="gt_table">
+  
+  <thead class="gt_col_headings">
+    <tr>
+      <th class="gt_col_heading gt_columns_bottom_border gt_left" rowspan="1" colspan="1"></th>
+      <th class="gt_col_heading gt_columns_bottom_border gt_center" rowspan="1" colspan="1">health risk</th>
+      <th class="gt_col_heading gt_columns_bottom_border gt_center" rowspan="1" colspan="1">n</th>
+      <th class="gt_col_heading gt_columns_bottom_border gt_right" rowspan="1" colspan="1">probability</th>
+      <th class="gt_col_heading gt_columns_bottom_border gt_right" rowspan="1" colspan="1">stratified causal effect</th>
+      <th class="gt_col_heading gt_columns_bottom_border gt_right" rowspan="1" colspan="1">weighted causal effect</th>
+    </tr>
+  </thead>
+  <tbody class="gt_table_body">
+    <tr>
+      <td class="gt_row gt_left gt_stub"></td>
+      <td class="gt_row gt_center">high_risk</td>
+      <td class="gt_row gt_center">183</td>
+      <td class="gt_row gt_right">0.183</td>
+      <td class="gt_row gt_right">30</td>
+      <td class="gt_row gt_right">5.49</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left gt_stub"></td>
+      <td class="gt_row gt_center">low_risk</td>
+      <td class="gt_row gt_center">817</td>
+      <td class="gt_row gt_right">0.817</td>
+      <td class="gt_row gt_right">10</td>
+      <td class="gt_row gt_right">8.17</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_stub gt_right gt_grand_summary_row gt_first_grand_summary_row">marginal causal effect</td>
+      <td class="gt_row gt_center gt_grand_summary_row gt_first_grand_summary_row"></td>
+      <td class="gt_row gt_center gt_grand_summary_row gt_first_grand_summary_row"></td>
+      <td class="gt_row gt_right gt_grand_summary_row gt_first_grand_summary_row"></td>
+      <td class="gt_row gt_right gt_grand_summary_row gt_first_grand_summary_row"></td>
+      <td class="gt_row gt_right gt_grand_summary_row gt_first_grand_summary_row">13.66</td>
+    </tr>
+  </tbody>
+  
+  
+</table></div>
+<p>It’s worth pointing out that the stratified causal effects may be more useful than the margin causal effect. This is especially true if our intervention can be applied to each stratification differently. By doing this we can make sure we are treating those people that benefit from the treatment, while excluding those that might be negatively impacted by it.</p>
+</div>
+<div id="ip-weighting" class="section level1">
+<h1>IP Weighting</h1>
+<p>The general idea with IP weighting is to weight each data point by the inverse of the probability that the person was treated given the stratification to which they belong. What this does is essentially simulate a population where the probability of being treated in each stratification is the same, while preserving the ratio of people in each stratification. Under these circumstances the association between two variables becomes an unbiased estimator for the causal effect.</p>
+<p>First we calculate the probability of being treated given the sickness level for each individual:</p>
+<pre class="r"><code>fit &lt;- glm(
+  treatment ~ health_risk,
+  family = binomial,
+  data = data_fab
+)</code></pre>
+<pre class="r"><code>data_fab &lt;- data_fab %&gt;% 
+  mutate(p.treatment.obs =
+  if_else(data_fab$treatment == &quot;prescribed_drug&quot;,
+         predict(fit, type = &quot;response&quot;),
+         1- predict(fit, type = &quot;response&quot;)))</code></pre>
+<p>Then we calculate the weights as the inverse of these probabilities:</p>
+<pre class="r"><code>data_fab$w &lt;- 1 / data_fab$p.treatment.obs</code></pre>
+<p>Finally we use the wieghts to perform weighted linear regression and estimate the effect of prescribing the drug:</p>
+<pre class="r"><code># install.packages(&quot;geepack&quot;) # install package if required
+
+ids &lt;-  as.factor(1:10000)
+library(&quot;geepack&quot;)
+msm.w &lt;- geeglm(
+  health_score ~ treatment,
+  data = data_fab,
+  weights = w,
+  id = 1:1000,
+  corstr = &quot;independence&quot;
+)
+msm.w</code></pre>
+<pre><code>## 
+## Call:
+## geeglm(formula = health_score ~ treatment, data = data_fab, weights = w, 
+##     id = 1:1000, corstr = &quot;independence&quot;)
+## 
+## Coefficients:
+##              (Intercept) treatmentprescribed_drug 
+##                    67.19                    13.66 
+## 
+## Degrees of Freedom: 1000 Total (i.e. Null);  998 Residual
+## 
+## Scale Link:                   identity
+## Estimated Scale Parameters:  [1] 553.1907
+## 
+## Correlation:  Structure = independence  
+## Number of clusters:   1000   Maximum cluster size: 1</code></pre>
+<p>The mean causal effect of being prescribed the drug over not being prescribed it is 13.66. This is identical to what we calculated using standardization, confirming out result is correct.</p>
+</div>
+<div id="final-comments" class="section level1">
+<h1>Final Comments</h1>
+<p>What we have achieved in this post is fairly basic. My hope is that you will have started to appreciate some of the fundamental issues with estimating causal effects. In the real world there can be many complicating issues, for example:</p>
+<ul>
+<li><p>The common cause could a continuous variable</p></li>
+<li><p>The treatment could be continuous variable</p></li>
+<li><p>There might be censoring creating collider bias</p></li>
+<li><p>The treatments might vary across time</p></li>
+</ul>
+<p>If you want to perform causal analysis well there is much more to study.</p>
+</div>
+<div id="further-study" class="section level1">
+<h1>Further study</h1>
+<p>Personally, I found the book Causal Inference: What If. (Hernan &amp; Robins) extremely useful, which you can access for free here: <a href="https://www.hsph.harvard.edu/miguel-hernan/causal-inference-book/" class="uri">https://www.hsph.harvard.edu/miguel-hernan/causal-inference-book/</a>
+For me the book is clear and thorough in the concepts required for more complex real-world applications of causal inference.
+I also know people who are studying the Coursera Crash Course in Causality <a href="https://www.coursera.org/learn/crash-course-in-causality" class="uri">https://www.coursera.org/learn/crash-course-in-causality</a>
+Also Emily Riederer has very kindly collated a great list of resources here:
+<a href="https://emilyriederer.netlify.app/post/resource-roundup-causal/" class="uri">https://emilyriederer.netlify.app/post/resource-roundup-causal/</a></p>
+</div>

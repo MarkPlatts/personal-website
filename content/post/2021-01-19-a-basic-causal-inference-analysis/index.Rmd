@@ -1,0 +1,476 @@
+---
+title: A Basic Causal Analysis
+author: Mark Platts
+date: '2021-01-16'
+slug: a-basic-causal-analysis
+categories: []
+tags: []
+---
+
+Causal inference is a set of methods used to predict what will happen to an outcome when we change an input variable. In this post I will demonstrate how it can be used to solve a simple problem. I'll introduce you to some foundational causal inference methods and by following along you'll gain intuition into why correlation between two variables can be a poor estimate of the causal effect.  I've stripped back the complexity to make the the core features of the analysis obvious, but in the real world causal inference is usually much more involved.
+
+```{r, echo = F}
+knitr::opts_chunk$set(eval = TRUE, message = FALSE)
+```
+
+```{r, echo = F}
+library(tidyverse)
+library(purrr)
+library(janitor)
+library(scales)
+library(gt)
+library(ggdag)
+library(dagR)
+library(DiagrammeR)
+
+set.seed(100)
+
+theme_set(theme_bw())
+```
+# A simple reason for bias: common cause
+
+Associations between two variables are often biased estimates of the causal effect. There are many reasons for this, but perhaps the most typical is that the variables of interest have a common cause. We will use causal inference to estimate a drugs effect on a persons health where a person's health risk is a common cause. More specifically, people with a high health risk are more likely to be prescribed the drug and at the same time have a worse health score than people with a low health risk. We can represent this common cause dynamic with a directed acyclic graph (DAG):
+
+```{r, echo = FALSE}
+
+grViz("
+      digraph boxes_and_circles {
+      node [shape = circle,
+            fontname = Helvetica,
+            penwidth = 2.0]
+      Risk; Treatment; Health
+      #add edges
+      Risk->Treatment [fontname = Helvetica]
+      Risk->Health [fontname = Helvetica]
+      Treatment->Health [fontname = Helvetica]
+      }
+      ")
+
+```
+
+The probabilities of a person being in each health risk level and the probability of being prescribed the drug given their risk level are indicated in the following probability tree:
+
+```{r, echo = FALSE}
+grViz("
+      digraph boxes_and_circles {
+      node [shape = circle,
+            fontname = Helvetica,
+            penwidth = 2.0]
+      Individual; 
+      High_Risk; Low_Risk 
+      Prescribed; Not_Prescribed
+      Prescribed_;Not_Prescribed_
+      #add edges
+      Individual->High_Risk [label = ' 0.2', fontname = Helvetica]
+      Individual->Low_Risk [label = '0.8', fontname = Helvetica]
+      High_Risk->Not_Prescribed [label = '  0.1', fontname = Helvetica]
+      High_Risk->Prescribed [label = ' 0.9', fontname = Helvetica]
+      Low_Risk->Not_Prescribed_ [label = ' 0.9', fontname = Helvetica]
+      Low_Risk->Prescribed_ [label = '  0.1', fontname = Helvetica]
+      }
+      ")
+
+# probability_high_risk <- 0.2
+# probability_low_risk <- 0.8
+# 
+# probality_not_prescribed_given_high_risk <- 0.1
+# probability_prescribed_given_high_risk <- 0.9
+# 
+# probability_not_prescribed_given_low_risk <- 0.9
+# probability_prescribed_given_low_risk <- 0.1
+# 
+# health_if_not_prescribed_and_high_risk = 10
+# health_if_prescribed_and_high_risk = 20
+# 
+# health_if_not_prescribed_and_low_risk = 80
+# health_if_prescribed_and_low_risk = 90
+```
+
+Finally the health scores given their health risk level and whether they were prescribed the drug are:
+
+```{r, echo = F}
+
+df_health_scores <- tribble(~health_risk, ~treatment, ~health_score,
+          "high_risk", "prescribed_drug", 20,
+          "high_risk", "no_treatment", 10,
+          "low_risk", "prescribed_drug", 90,
+          "low_risk", "no_treatment", 80) 
+
+df_health_scores %>% 
+  gt()
+```
+
+Notice that within each health risk level the drug improves the health score by 10. To simplify our calculations the average causal effect is identical in both health risk levels. Later we will explore a situation where the effects are different.
+
+# Generating synthetic data
+
+We are going to use synthetic data which will help you to understand how bias is created, as well as enable us to check whether our causal effect estimates are correct. Initially we will go through this in a manual step-by-step manner to generate the data for one person. Afterward we will automate this process to generate the data set to analyze.
+
+## Sampling the data for one person
+
+The first thing we need to know about a person is whether they are a high or low health risk individual. Given that the probability of being high health risk is 0.2 we can sample their health risk level as follows:
+
+```{r}
+set.seed(1)
+sampled_health_risk <- if_else(runif(1)<=0.2, 
+                        "high_risk", 
+                        "low_risk")
+
+sampled_health_risk
+```
+
+Now we know that the persons health risk is `r sampled_health_risk`, the next thing we need to know is whether they are prescribed the drug. Given the person is `r sampled_health_risk` the probability of being prescribed the drug is 0.1. Let's use this to sample whether the person is prescribed the drug or not:
+
+```{r}
+set.seed(123)
+sampled_treatment = if_else(runif(1)<=0.1, 
+                          "prescribed_drug", 
+                          "no_treatment")
+
+sampled_treatment
+```
+
+The final step is to determine their health score given that we know their health risk is `r sampled_health_risk` and their treatment is `r sampled_treatment`. We can read this directly from the table above:
+
+```{r}
+
+sampled_health_score <- df_health_scores %>% 
+  filter(
+    health_risk == sampled_health_risk & treatment == sampled_treatment) %>% 
+  pull(health_score)
+
+sampled_health_score
+```
+
+In the real world there would usually be some random variability in the health_score, but for simplicity I have omitted this.
+
+So there we have it. We have synthetically produced one line of data for our data frame:
+
+```{r, echo = F}
+tribble(
+  ~risk_level, ~treatment, ~health_score,
+  sampled_health_risk, sampled_treatment, sampled_health_score
+  ) %>% 
+  gt()
+```
+
+## Synthetically creating the entire dataset
+
+All we need to do is automate this process to create a complete data set that we can use for our analysis.
+
+```{r}
+simulate_one_person_continuous <- function(x) {
+  
+  prob_low_risk = 0.8
+  
+  prob_no_prescription_if_high_risk = 0.1
+  prob_no_prescription_if_low_risk = 0.9
+  
+  health_score_if_treated_by_no_prescription_and_high_risk = 10
+  health_score_if_treated_by_drug_and_high_risk = 20
+  
+  health_score_if_treated_by_no_prescription_and_low_risk = 80
+  health_score_if_treated_by_drug_and_low_risk = 90
+  
+  
+  health_risk <- if_else(runif(1)>prob_low_risk, "high_risk", "low_risk")
+  
+  random_number <- runif(1)
+  treatment <- ifelse(health_risk == "high_risk",
+                         if_else(random_number>prob_no_prescription_if_high_risk, "prescribed_drug", "no_treatment"),
+      if_else(random_number>prob_no_prescription_if_low_risk, "prescribed_drug", "no_treatment")
+  )
+  
+  ran_death <- runif(1)
+  
+  if(treatment == "no_treatment" & health_risk == "high_risk") {
+    health_score = health_score_if_treated_by_no_prescription_and_high_risk
+  } else if(treatment == "no_treatment" & health_risk == "low_risk"){
+    health_score = health_score_if_treated_by_no_prescription_and_low_risk
+  } else if(treatment == "prescribed_drug" & health_risk == "high_risk") {
+    health_score = health_score_if_treated_by_drug_and_high_risk
+  } else {
+    health_score = health_score_if_treated_by_drug_and_low_risk
+  }
+  
+  tibble(
+    health_risk = health_risk,
+    treatment = treatment,
+    health_score = health_score)
+}
+
+data_fab <- map_dfr(.x = 1:1000, .f = simulate_one_person_continuous)
+
+data_fab <- data_fab %>% mutate_if(is.character, ~as.factor(.))
+```
+
+Here is a sample of the data created:
+
+```{r, echo = F}
+data_fab %>% head() %>% gt()
+```
+
+# Calculating a naive estimate
+
+Let's calculate the difference in the health score between those that are and aren't prescribed the drug.
+
+```{r}
+lm(health_score~treatment, data_fab)
+```
+
+People who take the drug have a worse health score. It would be a mistake to assume that this means the drug has a negative impact. In fact we know that the drug improves a persons health score by 10. The problem here is that we aren't comparing apples with apples. The people receiving the drug are generally higher risk than the people who aren't. This means the average of the people treated is affected not only by the treatment but also by the general risk level of the people who are treated. Because the health risk level has such a strong effect on the health score in comparison to the treatment it means the naive estimate is the reverse of the actual causal effect. This could have serious implications. Actions taken based on the association between two variables could lead us to a worse action than doing nothing at all. In our example if we were to stop prescribing the drug, everyone would have worse health.
+
+# Plotting the data
+
+Let's look at some histograms showing the distribution of health scores for each treatment to make this point clearer. Here is a histogram of the health scores for no treatment and prescribed drug, with a red line indicating the mean health score:
+
+```{r, echo = FALSE}
+treatment_labs <- c(no_treatment = "No Treatment", 
+                    prescribed_drug = "Prescribed Drug")
+
+treatment_mean_health_scores <- data_fab %>% group_by(treatment) %>% 
+  summarise(mean_health_score = mean(health_score))
+
+data_fab %>% 
+  ggplot(aes(x = health_score)) + 
+  geom_histogram() + 
+  facet_grid(treatment~.,
+             labeller = labeller(treatment = treatment_labs),
+             scales = "free_y") + 
+  geom_vline(aes(xintercept = mean_health_score), treatment_mean_health_scores, color = "red") +
+  expand_limits(x = 0) +
+  theme(legend.position="bottom",
+        strip.text.y = element_text(size = 16),
+        axis.title.x = element_text(size = 16),
+        axis.text.y = element_text(size = 16),
+        text = element_text(size = 16)) +
+  labs(x = "Health Score", y = "Count")
+```
+
+Notice that no treatment has a far higher mean health score. However, let's look at what happens if we use color to show the risk levels:
+
+```{r, echo = FALSE}
+data_fab %>% 
+  ggplot(aes(x = health_score, fill = health_risk)) + 
+  geom_histogram() + 
+  facet_grid(treatment~.,
+             labeller = labeller(treatment = treatment_labs),
+             scales = "free_y") + 
+  expand_limits(x = 0) +
+  theme(legend.position="bottom",
+        strip.text.y = element_text(size = 16),
+        axis.title.x = element_text(size = 16),
+        axis.text.y = element_text(size = 16),
+        text = element_text(size = 16)) +
+  labs(x = "Health Score", y = "Count", fill = "") +
+  scale_fill_discrete(labels = c("High Risk", "Low Risk"))
+```
+
+Within each risk level we can see that prescribing the drug actually increases the health score. This is known as the Simpson's Paradox which happens when a simple aggregated mean difference is the reverse of the causal effect.
+
+# Causal inference
+
+In our circumstance we have an easy solution. By including health_risk as a factor in the linear regression model we correct for the bias:
+
+```{r}
+lm(health_score~health_risk + treatment, data_fab)
+```
+
+Notice that the treatment prescribed_drug coefficient is 10, which is exactly the value we used to generate the data.
+
+# Heterogeneous treatment effects
+
+While still keeping things as simple as possible, let's slightly complicate the above analysis by making the average treatment effect in the low risk different from the high risk. This will be a nice introduction to the techniques that are applied in more complicated situations.
+
+By setting the health score for high risk patients to 10 when not prescribed and 40 when prescribed we are setting the drug to have a 30 improvement in the health score for high risk patients. In addition, by setting the health score for low risk patients to 80 when not prescribed and 90 when prescribed, we are setting the drug to have a 10 improvement in health score in low risk patients.
+
+```{r}
+
+simulate_one_person_continuous <- function(x) {
+  
+  prob_low_risk = 0.8
+  
+  prob_no_prescription_if_high_risk = 0.1
+  prob_no_prescription_if_low_risk = 0.9
+  
+  health_score_if_treated_by_no_prescription_and_high_risk = 10
+  health_score_if_treated_by_drug_and_high_risk = 40
+  
+  health_score_if_treated_by_no_prescription_and_low_risk = 80
+  health_score_if_treated_by_drug_and_low_risk = 90
+  
+  
+  health_risk <- if_else(runif(1)>prob_low_risk, "high_risk", "low_risk")
+  
+  random_number <- runif(1)
+  treatment <- ifelse(health_risk == "high_risk",
+                         if_else(random_number>prob_no_prescription_if_high_risk, "prescribed_drug", "no_treatment"),
+      if_else(random_number>prob_no_prescription_if_low_risk, "prescribed_drug", "no_treatment")
+  )
+  
+  ran_death <- runif(1)
+  
+  if(treatment == "no_treatment" & health_risk == "high_risk") {
+    health_score = health_score_if_treated_by_no_prescription_and_high_risk
+  } else if(treatment == "no_treatment" & health_risk == "low_risk"){
+    health_score = health_score_if_treated_by_no_prescription_and_low_risk
+  } else if(treatment == "prescribed_drug" & health_risk == "high_risk") {
+    health_score = health_score_if_treated_by_drug_and_high_risk
+  } else {
+    health_score = health_score_if_treated_by_drug_and_low_risk
+  }
+  
+  tibble(
+    health_risk = health_risk,
+    treatment = treatment,
+    health_score = health_score)
+}
+
+data_fab <- map_dfr(.x = 1:1000, .f = simulate_one_person_continuous)
+
+data_fab <- data_fab %>% mutate_if(is.character, ~as.factor(.))
+
+data_fab %>% head()
+```
+
+By including an interaction term for the treatment and the sickness level we can calculate the effect in each stratification of risk level:
+
+```{r}
+lm(health_score~health_risk*treatment, data_fab)
+```
+
+Now we see that there is a different causal effect for each risk level. If a prescribed the drug and high risk the effect on the health score is 30. If the person is low risk 20 is deducted from this leaving an increase in health score of 10. We know this is correct because this is what we used to generate the data. 
+
+If we want to know the difference between treating everyone and treating no one, two alternative approaches could be used, IP weighting and standardization. Each approach depend on different assumptions, making it good practice to apply both to test the robustness of these assumptions and validate the results. We will start with standardization because it is the most intuitive.
+
+# Standardization
+
+In standardization we are taking a weighted average of the causal effects in each stratification. The weights are the probability of a patient being in each stratification. In our case this is the probability of a person being high or low risk, which we can calculate empirically as the proportion of people in each stratification.
+
+```{r, echo = FALSE}
+treatment_health_score <- data_fab %>% 
+  filter(health_risk == "low_risk") %>% 
+  group_by(treatment) %>% 
+  summarize(mean_health_score = mean(health_score))
+
+no_treatment_health_score <- treatment_health_score %>% 
+  filter(treatment == "no_treatment") %>% 
+  pull(mean_health_score)
+
+prescribed_drug_health_score <- treatment_health_score %>% 
+  filter(treatment == "prescribed_drug") %>% 
+  pull(mean_health_score)
+
+low_risk_causal_effect <- prescribed_drug_health_score - no_treatment_health_score
+
+
+treatment_health_score <- data_fab %>% 
+  filter(health_risk == "high_risk") %>% 
+  group_by(treatment) %>% 
+  summarize(mean_health_score = mean(health_score))
+
+no_treatment_health_score <- treatment_health_score %>% 
+  filter(treatment == "no_treatment") %>% 
+  pull(mean_health_score)
+
+prescribed_drug_health_score <- treatment_health_score %>% 
+  filter(treatment == "prescribed_drug") %>% 
+  pull(mean_health_score)
+
+high_risk_causal_effect <- prescribed_drug_health_score - no_treatment_health_score
+
+```
+
+
+```{r, echo = F}
+causal_effect_table <- data_fab %>% count(`health risk` = health_risk) %>% 
+  mutate(probability = n/sum(n)) %>% 
+  mutate(`stratified causal effect` = c(high_risk_causal_effect, 
+                                    low_risk_causal_effect)) %>% 
+  mutate(`weighted causal effect` = probability * `stratified causal effect`)
+```
+
+
+```{r, echo = F}
+
+causal_effect_table %>%
+  gt() %>%
+  summary_rows(columns = vars(`weighted causal effect`), fns = list(`marginal causal effect`= ~sum(.)),
+               missing_text = "")
+
+```
+
+It's worth pointing out that the stratified causal effects may be more useful than the margin causal effect. This is especially true if our intervention can be applied to each stratification differently. By doing this we can make sure we are treating those people that benefit from the treatment, while excluding those that might be negatively impacted by it.
+
+# IP Weighting
+
+The general idea with IP weighting is to weight each data point by the inverse of the probability that the person was treated given the stratification to which they belong. What this does is essentially simulate a population where the probability of being treated in each stratification is the same, while preserving the ratio of people in each stratification. Under these circumstances the association between two variables becomes an unbiased estimator for the causal effect.
+
+First we calculate the probability of being treated given the sickness level for each individual:
+
+```{r}
+fit <- glm(
+  treatment ~ health_risk,
+  family = binomial,
+  data = data_fab
+)
+```
+
+```{r}
+data_fab <- data_fab %>% 
+  mutate(p.treatment.obs =
+  if_else(data_fab$treatment == "prescribed_drug",
+         predict(fit, type = "response"),
+         1- predict(fit, type = "response")))
+```
+
+Then we calculate the weights as the inverse of these probabilities:
+
+```{r}
+data_fab$w <- 1 / data_fab$p.treatment.obs
+```
+
+Finally we use the wieghts to perform weighted linear regression and estimate the effect of prescribing the drug:
+
+```{r}
+# install.packages("geepack") # install package if required
+
+ids <-  as.factor(1:10000)
+library("geepack")
+msm.w <- geeglm(
+  health_score ~ treatment,
+  data = data_fab,
+  weights = w,
+  id = 1:1000,
+  corstr = "independence"
+)
+msm.w
+```
+
+```{r, echo = F}
+calculated_coef <- msm.w$coefficients[2] %>% as.vector()
+```
+
+The mean causal effect of being prescribed the drug over not being prescribed it is `r calculated_coef`. This is identical to what we calculated using standardization, confirming out result is correct.
+
+# Final Comments
+
+What we have achieved in this post is fairly basic. My hope is that you will have started to appreciate some of the fundamental issues with estimating causal effects. In the real world there can be many complicating issues, for example: 
+
+- The common cause could a continuous variable
+
+- The treatment could be continuous variable
+
+- There might be censoring creating collider bias 
+
+- The treatments might vary across time
+
+If you want to perform causal analysis well there is much more to study.
+
+# Further study
+
+Personally, I found the book Causal Inference: What If. (Hernan & Robins) extremely useful, which you can access for free here: https://www.hsph.harvard.edu/miguel-hernan/causal-inference-book/
+For me the book is clear and thorough in the concepts required for more complex real-world applications of causal inference. 
+I also know people who are studying the Coursera Crash Course in Causality https://www.coursera.org/learn/crash-course-in-causality
+Also Emily Riederer has very kindly collated a great list of resources here:
+https://emilyriederer.netlify.app/post/resource-roundup-causal/

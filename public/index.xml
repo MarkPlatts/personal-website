@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Home on Blog - Mark Platts</title>
+    <link>/</link>
+    <description>Recent content in Home on Blog - Mark Platts</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>en-us</language>
+    <lastBuildDate>Sat, 16 Jan 2021 00:00:00 +0000</lastBuildDate><atom:link href="/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>A Basic Causal Analysis</title>
+      <link>/2021/01/16/a-basic-causal-analysis/</link>
+      <pubDate>Sat, 16 Jan 2021 00:00:00 +0000</pubDate>
+      
+      <guid>/2021/01/16/a-basic-causal-analysis/</guid>
+      <description>Causal inference is a set of methods used to predict what will happen to an outcome when we change an input variable. In this post we will use it to solve a simple problem. By following along you’ll gain intuition into why the correlation between two variables can be poor estimates of the causal effect. I’ll also introduce you to basic causal inference methods. I’ve stripped back the complexity to make the the core features of a causal analysis obvious, but in the real world causal inference is usually much more involved.</description>
+    </item>
+    
+    <item>
+      <title>About</title>
+      <link>/about/</link>
+      <pubDate>Thu, 05 May 2016 21:48:51 -0700</pubDate>
+      
+      <guid>/about/</guid>
+      <description>My mission is to use data analytics to improve health. I am deeply interested in statistical modeling and causal inference. I am exceptionally curious, known for technical versatility and work well both alone and as part of a team.</description>
+    </item>
+    
+  </channel>
+</rss>
