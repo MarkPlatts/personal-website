@@ -1291,39 +1291,8 @@ data_fab &lt;- data_fab %&gt;% mutate_if(is.character, ~as.factor(.))</code></pr
 
 data_fab &lt;- map_dfr(.x = 1:1000, .f = simulate_one_person_continuous)
 
-data_fab &lt;- data_fab %&gt;% mutate_if(is.character, ~as.factor(.))
-
-data_fab %&gt;% head()</code></pre>
-<pre><code>## # A tibble: 6 x 3
-##   health_risk treatment       health_score
-##   &lt;fct&gt;       &lt;fct&gt;                  &lt;dbl&gt;
-## 1 low_risk    no_treatment              80
-## 2 high_risk   prescribed_drug           40
-## 3 low_risk    prescribed_drug           90
-## 4 low_risk    no_treatment              80
-## 5 low_risk    no_treatment              80
-## 6 low_risk    no_treatment              80</code></pre>
-<p>By including an interaction term for the treatment and the sickness level we can calculate the effect in each stratification of risk level:</p>
-<pre class="r"><code>lm(health_score~health_risk*treatment, data_fab)</code></pre>
-<pre><code>## 
-## Call:
-## lm(formula = health_score ~ health_risk * treatment, data = data_fab)
-## 
-## Coefficients:
-##                                  (Intercept)  
-##                                           10  
-##                          health_risklow_risk  
-##                                           70  
-##                     treatmentprescribed_drug  
-##                                           30  
-## health_risklow_risk:treatmentprescribed_drug  
-##                                          -20</code></pre>
-<p>Now we see that there is a different causal effect for each risk level. If a prescribed the drug and high risk the effect on the health score is 30. If the person is low risk 20 is deducted from this leaving an increase in health score of 10. We know this is correct because this is what we used to generate the data.</p>
-<p>If we want to know the difference between treating everyone and treating no one, two alternative approaches could be used, IP weighting and standardization. Each approach depend on different assumptions, making it good practice to apply both to test the robustness of these assumptions and validate the results. We will start with standardization because it is the most intuitive.</p>
-</div>
-<div id="standardization" class="section level1">
-<h1>Standardization</h1>
-<p>In standardization we are taking a weighted average of the causal effects in each stratification. The weights are the probability of a patient being in each stratification. In our case this is the probability of a person being high or low risk, which we can calculate empirically as the proportion of people in each stratification.</p>
+data_fab &lt;- data_fab %&gt;% mutate_if(is.character, ~as.factor(.))</code></pre>
+<p>Here is a sample of the data created:</p>
 <style>html {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', 'Fira Sans', 'Droid Sans', Arial, sans-serif;
 }
@@ -1664,6 +1633,407 @@ data_fab %&gt;% head()</code></pre>
   
   <thead class="gt_col_headings">
     <tr>
+      <th class="gt_col_heading gt_columns_bottom_border gt_center" rowspan="1" colspan="1">health_risk</th>
+      <th class="gt_col_heading gt_columns_bottom_border gt_center" rowspan="1" colspan="1">treatment</th>
+      <th class="gt_col_heading gt_columns_bottom_border gt_right" rowspan="1" colspan="1">health_score</th>
+    </tr>
+  </thead>
+  <tbody class="gt_table_body">
+    <tr>
+      <td class="gt_row gt_center">low_risk</td>
+      <td class="gt_row gt_center">no_treatment</td>
+      <td class="gt_row gt_right">80</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_center">high_risk</td>
+      <td class="gt_row gt_center">prescribed_drug</td>
+      <td class="gt_row gt_right">40</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_center">low_risk</td>
+      <td class="gt_row gt_center">prescribed_drug</td>
+      <td class="gt_row gt_right">90</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_center">low_risk</td>
+      <td class="gt_row gt_center">no_treatment</td>
+      <td class="gt_row gt_right">80</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_center">low_risk</td>
+      <td class="gt_row gt_center">no_treatment</td>
+      <td class="gt_row gt_right">80</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_center">low_risk</td>
+      <td class="gt_row gt_center">no_treatment</td>
+      <td class="gt_row gt_right">80</td>
+    </tr>
+  </tbody>
+  
+  
+</table></div>
+<p>By including an interaction term for the treatment and the sickness level we can calculate the effect in each stratification of risk level:</p>
+<pre class="r"><code>lm(health_score~health_risk*treatment, data_fab)</code></pre>
+<pre><code>## 
+## Call:
+## lm(formula = health_score ~ health_risk * treatment, data = data_fab)
+## 
+## Coefficients:
+##                                  (Intercept)  
+##                                           10  
+##                          health_risklow_risk  
+##                                           70  
+##                     treatmentprescribed_drug  
+##                                           30  
+## health_risklow_risk:treatmentprescribed_drug  
+##                                          -20</code></pre>
+<p>Now we see that there is a different causal effect for each risk level. If a prescribed the drug and high risk the effect on the health score is 30. If the person is low risk 20 is deducted from this leaving an increase in health score of 10. We know this is correct because this is what we used to generate the data.</p>
+<p>If we want to know the difference between treating everyone and treating no one, two alternative approaches could be used, IP weighting and standardization. Each approach depend on different assumptions, making it good practice to apply both to test the robustness of these assumptions and validate the results. We will start with standardization because it is the most intuitive.</p>
+</div>
+<div id="standardization" class="section level1">
+<h1>Standardization</h1>
+<p>In standardization we are taking a weighted average of the causal effects in each stratification. The weights are the probability of a patient being in each stratification. In our case this is the probability of a person being high or low risk, which we can calculate empirically as the proportion of people in each stratification.</p>
+<style>html {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', 'Fira Sans', 'Droid Sans', Arial, sans-serif;
+}
+
+#dprmfqvcso .gt_table {
+  display: table;
+  border-collapse: collapse;
+  margin-left: auto;
+  margin-right: auto;
+  color: #333333;
+  font-size: 16px;
+  font-weight: normal;
+  font-style: normal;
+  background-color: #FFFFFF;
+  width: auto;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #A8A8A8;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #A8A8A8;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+}
+
+#dprmfqvcso .gt_heading {
+  background-color: #FFFFFF;
+  text-align: center;
+  border-bottom-color: #FFFFFF;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+}
+
+#dprmfqvcso .gt_title {
+  color: #333333;
+  font-size: 125%;
+  font-weight: initial;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  border-bottom-color: #FFFFFF;
+  border-bottom-width: 0;
+}
+
+#dprmfqvcso .gt_subtitle {
+  color: #333333;
+  font-size: 85%;
+  font-weight: initial;
+  padding-top: 0;
+  padding-bottom: 4px;
+  border-top-color: #FFFFFF;
+  border-top-width: 0;
+}
+
+#dprmfqvcso .gt_bottom_border {
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+}
+
+#dprmfqvcso .gt_col_headings {
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+}
+
+#dprmfqvcso .gt_col_heading {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: normal;
+  text-transform: inherit;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: bottom;
+  padding-top: 5px;
+  padding-bottom: 6px;
+  padding-left: 5px;
+  padding-right: 5px;
+  overflow-x: hidden;
+}
+
+#dprmfqvcso .gt_column_spanner_outer {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: normal;
+  text-transform: inherit;
+  padding-top: 0;
+  padding-bottom: 0;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+#dprmfqvcso .gt_column_spanner_outer:first-child {
+  padding-left: 0;
+}
+
+#dprmfqvcso .gt_column_spanner_outer:last-child {
+  padding-right: 0;
+}
+
+#dprmfqvcso .gt_column_spanner {
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  vertical-align: bottom;
+  padding-top: 5px;
+  padding-bottom: 6px;
+  overflow-x: hidden;
+  display: inline-block;
+  width: 100%;
+}
+
+#dprmfqvcso .gt_group_heading {
+  padding: 8px;
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  text-transform: inherit;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: middle;
+}
+
+#dprmfqvcso .gt_empty_group_heading {
+  padding: 0.5px;
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  vertical-align: middle;
+}
+
+#dprmfqvcso .gt_from_md > :first-child {
+  margin-top: 0;
+}
+
+#dprmfqvcso .gt_from_md > :last-child {
+  margin-bottom: 0;
+}
+
+#dprmfqvcso .gt_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  margin: 10px;
+  border-top-style: solid;
+  border-top-width: 1px;
+  border-top-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: middle;
+  overflow-x: hidden;
+}
+
+#dprmfqvcso .gt_stub {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  text-transform: inherit;
+  border-right-style: solid;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+  padding-left: 12px;
+}
+
+#dprmfqvcso .gt_summary_row {
+  color: #333333;
+  background-color: #FFFFFF;
+  text-transform: inherit;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#dprmfqvcso .gt_first_summary_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+}
+
+#dprmfqvcso .gt_grand_summary_row {
+  color: #333333;
+  background-color: #FFFFFF;
+  text-transform: inherit;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#dprmfqvcso .gt_first_grand_summary_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-top-style: double;
+  border-top-width: 6px;
+  border-top-color: #D3D3D3;
+}
+
+#dprmfqvcso .gt_striped {
+  background-color: rgba(128, 128, 128, 0.05);
+}
+
+#dprmfqvcso .gt_table_body {
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+}
+
+#dprmfqvcso .gt_footnotes {
+  color: #333333;
+  background-color: #FFFFFF;
+  border-bottom-style: none;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+}
+
+#dprmfqvcso .gt_footnote {
+  margin: 0px;
+  font-size: 90%;
+  padding: 4px;
+}
+
+#dprmfqvcso .gt_sourcenotes {
+  color: #333333;
+  background-color: #FFFFFF;
+  border-bottom-style: none;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+}
+
+#dprmfqvcso .gt_sourcenote {
+  font-size: 90%;
+  padding: 4px;
+}
+
+#dprmfqvcso .gt_left {
+  text-align: left;
+}
+
+#dprmfqvcso .gt_center {
+  text-align: center;
+}
+
+#dprmfqvcso .gt_right {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+#dprmfqvcso .gt_font_normal {
+  font-weight: normal;
+}
+
+#dprmfqvcso .gt_font_bold {
+  font-weight: bold;
+}
+
+#dprmfqvcso .gt_font_italic {
+  font-style: italic;
+}
+
+#dprmfqvcso .gt_super {
+  font-size: 65%;
+}
+
+#dprmfqvcso .gt_footnote_marks {
+  font-style: italic;
+  font-size: 65%;
+}
+</style>
+<div id="dprmfqvcso" style="overflow-x:auto;overflow-y:auto;width:auto;height:auto;"><table class="gt_table">
+  
+  <thead class="gt_col_headings">
+    <tr>
       <th class="gt_col_heading gt_columns_bottom_border gt_left" rowspan="1" colspan="1"></th>
       <th class="gt_col_heading gt_columns_bottom_border gt_center" rowspan="1" colspan="1">health risk</th>
       <th class="gt_col_heading gt_columns_bottom_border gt_center" rowspan="1" colspan="1">n</th>
@@ -1706,7 +2076,7 @@ data_fab %&gt;% head()</code></pre>
 <div id="ip-weighting" class="section level1">
 <h1>IP Weighting</h1>
 <p>The general idea with IP weighting is to weight each data point by the inverse of the probability that the person was treated given the stratification to which they belong. What this does is essentially simulate a population where the probability of being treated in each stratification is the same, while preserving the ratio of people in each stratification. Under these circumstances the association between two variables becomes an unbiased estimator for the causal effect.</p>
-<p>First we calculate the probability of being treated given the sickness level for each individual:</p>
+<p>First we calculate the probability of their treatment level given the sickness level for each individual:</p>
 <pre class="r"><code>fit &lt;- glm(
   treatment ~ health_risk,
   family = binomial,
@@ -1719,7 +2089,7 @@ data_fab %&gt;% head()</code></pre>
          1- predict(fit, type = &quot;response&quot;)))</code></pre>
 <p>Then we calculate the weights as the inverse of these probabilities:</p>
 <pre class="r"><code>data_fab$w &lt;- 1 / data_fab$p.treatment.obs</code></pre>
-<p>Finally we use the wieghts to perform weighted linear regression and estimate the effect of prescribing the drug:</p>
+<p>Finally we use the weights to perform weighted linear regression and estimate the effect of prescribing the drug:</p>
 <pre class="r"><code># install.packages(&quot;geepack&quot;) # install package if required
 
 ids &lt;-  as.factor(1:10000)
@@ -1752,20 +2122,21 @@ msm.w</code></pre>
 </div>
 <div id="final-comments" class="section level1">
 <h1>Final Comments</h1>
-<p>What we have achieved in this post is fairly basic. My hope is that you will have started to appreciate some of the fundamental issues with estimating causal effects. In the real world there can be many complicating issues, for example:</p>
+<p>What we have achieved in this post is fairly basic. My hope is that by way of a basic example, you will have started to appreciate what causal inference is and the type of problem it is being used to overcome. In the real world there can be many complicating issues, for example:</p>
 <ul>
-<li><p>The common cause could a continuous variable</p></li>
+<li><p>The common cause could a be continuous variable</p></li>
 <li><p>The treatment could be continuous variable</p></li>
 <li><p>There might be censoring creating collider bias</p></li>
 <li><p>The treatments might vary across time</p></li>
 </ul>
-<p>If you want to perform causal analysis well there is much more to study.</p>
 </div>
 <div id="further-study" class="section level1">
 <h1>Further study</h1>
-<p>Personally, I found the book Causal Inference: What If. (Hernan &amp; Robins) extremely useful, which you can access for free here: <a href="https://www.hsph.harvard.edu/miguel-hernan/causal-inference-book/" class="uri">https://www.hsph.harvard.edu/miguel-hernan/causal-inference-book/</a>
-For me the book is clear and thorough in the concepts required for more complex real-world applications of causal inference.
-I also know people who are studying the Coursera Crash Course in Causality <a href="https://www.coursera.org/learn/crash-course-in-causality" class="uri">https://www.coursera.org/learn/crash-course-in-causality</a>
-Also Emily Riederer has very kindly collated a great list of resources here:
-<a href="https://emilyriederer.netlify.app/post/resource-roundup-causal/" class="uri">https://emilyriederer.netlify.app/post/resource-roundup-causal/</a></p>
+<p>If you decide to study this fascinating subject in greater depth, there are many resources available for free online. Personally, I found the book Causal Inference: What If. (Hernan &amp; Robins) extremely useful, which you can access for free here:</p>
+<p><a href="https://www.hsph.harvard.edu/miguel-hernan/causal-inference-book/" class="uri">https://www.hsph.harvard.edu/miguel-hernan/causal-inference-book/</a></p>
+<p>The book is clear and thorough in the concepts required for more complex real-world applications of causal inference.</p>
+<p>Coursera’s Crash Course in Causality might also be worth a look</p>
+<p><a href="https://www.coursera.org/learn/crash-course-in-causality" class="uri">https://www.coursera.org/learn/crash-course-in-causality</a></p>
+<p>Also Emily Riederer has very kindly collated a great list of resources here:</p>
+<p><a href="https://emilyriederer.netlify.app/post/resource-roundup-causal/" class="uri">https://emilyriederer.netlify.app/post/resource-roundup-causal/</a></p>
 </div>

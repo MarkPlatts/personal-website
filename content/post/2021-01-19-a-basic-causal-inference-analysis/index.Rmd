@@ -329,8 +329,12 @@ simulate_one_person_continuous <- function(x) {
 data_fab <- map_dfr(.x = 1:1000, .f = simulate_one_person_continuous)
 
 data_fab <- data_fab %>% mutate_if(is.character, ~as.factor(.))
+```
 
-data_fab %>% head()
+Here is a sample of the data created:
+
+```{r, echo = F}
+data_fab %>% head() %>% gt()
 ```
 
 By including an interaction term for the treatment and the sickness level we can calculate the effect in each stratification of risk level:
@@ -406,7 +410,7 @@ It's worth pointing out that the stratified causal effects may be more useful th
 
 The general idea with IP weighting is to weight each data point by the inverse of the probability that the person was treated given the stratification to which they belong. What this does is essentially simulate a population where the probability of being treated in each stratification is the same, while preserving the ratio of people in each stratification. Under these circumstances the association between two variables becomes an unbiased estimator for the causal effect.
 
-First we calculate the probability of being treated given the sickness level for each individual:
+First we calculate the probability of their treatment level given the sickness level for each individual:
 
 ```{r}
 fit <- glm(
@@ -430,7 +434,7 @@ Then we calculate the weights as the inverse of these probabilities:
 data_fab$w <- 1 / data_fab$p.treatment.obs
 ```
 
-Finally we use the wieghts to perform weighted linear regression and estimate the effect of prescribing the drug:
+Finally we use the weights to perform weighted linear regression and estimate the effect of prescribing the drug:
 
 ```{r}
 # install.packages("geepack") # install package if required
@@ -455,9 +459,9 @@ The mean causal effect of being prescribed the drug over not being prescribed it
 
 # Final Comments
 
-What we have achieved in this post is fairly basic. My hope is that you will have started to appreciate some of the fundamental issues with estimating causal effects. In the real world there can be many complicating issues, for example: 
+What we have achieved in this post is fairly basic. My hope is that by way of a basic example, you will have started to appreciate what causal inference is and the type of problem it is being used to overcome. In the real world there can be many complicating issues, for example: 
 
-- The common cause could a continuous variable
+- The common cause could a be continuous variable
 
 - The treatment could be continuous variable
 
@@ -465,12 +469,19 @@ What we have achieved in this post is fairly basic. My hope is that you will hav
 
 - The treatments might vary across time
 
-If you want to perform causal analysis well there is much more to study.
 
 # Further study
 
-Personally, I found the book Causal Inference: What If. (Hernan & Robins) extremely useful, which you can access for free here: https://www.hsph.harvard.edu/miguel-hernan/causal-inference-book/
-For me the book is clear and thorough in the concepts required for more complex real-world applications of causal inference. 
-I also know people who are studying the Coursera Crash Course in Causality https://www.coursera.org/learn/crash-course-in-causality
+If you decide to study this fascinating subject in greater depth, there are many resources available for free online. Personally, I found the book Causal Inference: What If. (Hernan & Robins) extremely useful, which you can access for free here: 
+
+https://www.hsph.harvard.edu/miguel-hernan/causal-inference-book/
+
+The book is clear and thorough in the concepts required for more complex real-world applications of causal inference. 
+
+Coursera's Crash Course in Causality might also be worth a look
+
+https://www.coursera.org/learn/crash-course-in-causality
+
 Also Emily Riederer has very kindly collated a great list of resources here:
+
 https://emilyriederer.netlify.app/post/resource-roundup-causal/
