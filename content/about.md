@@ -3,4 +3,4 @@ date: "2016-05-05T21:48:51-07:00"
 title: About
 ---
 
-My mission is to use data analytics to improve health. I am deeply interested in statistical modeling and causal inference. I am exceptionally curious, known for technical versatility and work well both alone and as part of a team.
+Imaginative data scientist, mathematical and statistical modeler and specialist in causal inference who provides evidence to healthcare providers and institutions on the efficacy of treatments and interventions. Twelve-year record of creating analytical tools that benefit outcomes of government policies and corporate healthcare.  Former manager and trainer of software developers and junior data scientist.  Lean Six Sigma Yellow Belt. Reader of classic literature and thought-provoking ideas, physically fit hiker, and regular meditator.
