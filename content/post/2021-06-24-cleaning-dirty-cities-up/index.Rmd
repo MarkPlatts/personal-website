@@ -1,0 +1,70 @@
+---
+title: Cleaning dirty cities
+author: Mark Platts
+date: '2021-06-24'
+slug: cleaning-dirty-cities-up
+categories: []
+tags: []
+---
+
+```{r, echo = FALSE, message=FALSE}
+library(tidyverse)
+library(stringr)
+library(stringdist)
+```
+I saw a post on linkedin today about Philadelphia being misspelled in a dataset and how it's difficult to clean up datasets like this. I couldn't help but get my hands on the data to see if I could solve the problem.
+
+I've done this type of thing before, joining two datasets where the values aren't identical and I know it can be tricky and in many situations impossible to get 100% right, especially if you aren't prepared to spend a good amount of time going through the data manually.
+
+Anyway, let's get the data loaded up and see what we can do to match all the names that aren't spelled correctly or have been spelled in an abbreviated format.
+
+Loading the data and filtering for Philadelphia:
+
+```{r, message=FALSE}
+df <- readr::read_csv("public_up_to_150k_10.csv")
+
+df_cities <- df %>% 
+  filter(BorrowerState == "PA") %>% 
+  select(BorrowerCity) %>% 
+  mutate(BorrowerCity = str_to_upper(BorrowerCity)) %>% 
+    distinct() %>%
+  filter(str_detect(BorrowerCity, "^P.")) %>% 
+  arrange(BorrowerCity)
+```
+
+The next thing I want to do is create a table that calculates the Levenshtein distance metric between Philadelphia and every other city name in the data set:
+
+```{r}
+df_lev <- df_cities %>% 
+  select(BorrowerCity) %>% 
+  mutate(TrueName = "PHILADELPHIA") %>% 
+  select(TrueName, BorrowerCity) %>% 
+  arrange(BorrowerCity) %>% 
+  mutate(levdist = stringdist(TrueName, BorrowerCity, method = "lv"))
+```
+
+Here's a sample of the data:
+
+```{r}
+df_lev %>% 
+  head() %>% 
+  gt::gt()
+```
+
+I would expect to see two modes for the distances, one with very low distances for words that are mispelled and one with longer distances for words that are clearly not Philadelphia and this is exactly what we get:
+
+```{r}
+df_lev %>% 
+  ggplot(aes(levdist)) + geom_bar()
+```
+
+It might look like a natural cut off here is anything with a distance above 5. Let's take a look at what is happening at this boundaary and see if we can validate this.
+
+```{r}
+df_lev %>% 
+  filter(between(levdist, 4, 9)) %>% 
+  arrange(levdist) %>% 
+  select(-TrueName) %>% 
+  gt::gt()
+```
+Here we can see that it is actually a good match for up to and including a distance of 7. Even then Phil with a distance of 8 is probably a match. That 5 is not a perfect break off, is unfortunate. If it was it would suggest that a clustering algorithm to automatically grab both clusters would be incredibly accurate. Matches above 5 though means that we would have a few errors if we took such an approach. Whether we can accept this level of inaccuracy depends on our needs. But if not and a high level of accuracy is needed we might need to do what we have done here and actually manually set the boundary as well as include exceptions.

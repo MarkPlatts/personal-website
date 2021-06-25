@@ -1,0 +1,995 @@
+---
+title: Cleaning dirty cities
+author: Mark Platts
+date: '2021-06-24'
+slug: cleaning-dirty-cities-up
+categories: []
+tags: []
+---
+
+
+
+<p>I saw a post on linkedin today about Philadelphia being misspelled in a dataset and how it’s difficult to clean up datasets like this. I couldn’t help but get my hands on the data to see if I could solve the problem.</p>
+<p>I’ve done this type of thing before, joining two datasets where the values aren’t identical and I know it can be tricky and in many situations impossible to get 100% right, especially if you aren’t prepared to spend a good amount of time going through the data manually.</p>
+<p>Anyway, let’s get the data loaded up and see what we can do to match all the names that aren’t spelled correctly or have been spelled in an abbreviated format.</p>
+<p>Loading the data and filtering for Philadelphia:</p>
+<pre class="r"><code>df &lt;- readr::read_csv(&quot;public_up_to_150k_10.csv&quot;)
+
+df_cities &lt;- df %&gt;% 
+  filter(BorrowerState == &quot;PA&quot;) %&gt;% 
+  select(BorrowerCity) %&gt;% 
+  mutate(BorrowerCity = str_to_upper(BorrowerCity)) %&gt;% 
+    distinct() %&gt;%
+  filter(str_detect(BorrowerCity, &quot;^P.&quot;)) %&gt;% 
+  arrange(BorrowerCity)</code></pre>
+<p>The next thing I want to do is create a table that calculates the Levenshtein distance metric between Philadelphia and every other city name in the data set:</p>
+<pre class="r"><code>df_lev &lt;- df_cities %&gt;% 
+  select(BorrowerCity) %&gt;% 
+  mutate(TrueName = &quot;PHILADELPHIA&quot;) %&gt;% 
+  select(TrueName, BorrowerCity) %&gt;% 
+  arrange(BorrowerCity) %&gt;% 
+  mutate(levdist = stringdist(TrueName, BorrowerCity, method = &quot;lv&quot;))</code></pre>
+<p>Here’s a sample of the data:</p>
+<pre class="r"><code>df_lev %&gt;% 
+  head() %&gt;% 
+  gt::gt()</code></pre>
+<style>html {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', 'Fira Sans', 'Droid Sans', Arial, sans-serif;
+}
+
+#epdfauixxi .gt_table {
+  display: table;
+  border-collapse: collapse;
+  margin-left: auto;
+  margin-right: auto;
+  color: #333333;
+  font-size: 16px;
+  font-weight: normal;
+  font-style: normal;
+  background-color: #FFFFFF;
+  width: auto;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #A8A8A8;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #A8A8A8;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+}
+
+#epdfauixxi .gt_heading {
+  background-color: #FFFFFF;
+  text-align: center;
+  border-bottom-color: #FFFFFF;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+}
+
+#epdfauixxi .gt_title {
+  color: #333333;
+  font-size: 125%;
+  font-weight: initial;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  border-bottom-color: #FFFFFF;
+  border-bottom-width: 0;
+}
+
+#epdfauixxi .gt_subtitle {
+  color: #333333;
+  font-size: 85%;
+  font-weight: initial;
+  padding-top: 0;
+  padding-bottom: 4px;
+  border-top-color: #FFFFFF;
+  border-top-width: 0;
+}
+
+#epdfauixxi .gt_bottom_border {
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+}
+
+#epdfauixxi .gt_col_headings {
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+}
+
+#epdfauixxi .gt_col_heading {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: normal;
+  text-transform: inherit;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: bottom;
+  padding-top: 5px;
+  padding-bottom: 6px;
+  padding-left: 5px;
+  padding-right: 5px;
+  overflow-x: hidden;
+}
+
+#epdfauixxi .gt_column_spanner_outer {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: normal;
+  text-transform: inherit;
+  padding-top: 0;
+  padding-bottom: 0;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+#epdfauixxi .gt_column_spanner_outer:first-child {
+  padding-left: 0;
+}
+
+#epdfauixxi .gt_column_spanner_outer:last-child {
+  padding-right: 0;
+}
+
+#epdfauixxi .gt_column_spanner {
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  vertical-align: bottom;
+  padding-top: 5px;
+  padding-bottom: 6px;
+  overflow-x: hidden;
+  display: inline-block;
+  width: 100%;
+}
+
+#epdfauixxi .gt_group_heading {
+  padding: 8px;
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  text-transform: inherit;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: middle;
+}
+
+#epdfauixxi .gt_empty_group_heading {
+  padding: 0.5px;
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  vertical-align: middle;
+}
+
+#epdfauixxi .gt_from_md > :first-child {
+  margin-top: 0;
+}
+
+#epdfauixxi .gt_from_md > :last-child {
+  margin-bottom: 0;
+}
+
+#epdfauixxi .gt_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  margin: 10px;
+  border-top-style: solid;
+  border-top-width: 1px;
+  border-top-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: middle;
+  overflow-x: hidden;
+}
+
+#epdfauixxi .gt_stub {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  text-transform: inherit;
+  border-right-style: solid;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+  padding-left: 12px;
+}
+
+#epdfauixxi .gt_summary_row {
+  color: #333333;
+  background-color: #FFFFFF;
+  text-transform: inherit;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#epdfauixxi .gt_first_summary_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+}
+
+#epdfauixxi .gt_grand_summary_row {
+  color: #333333;
+  background-color: #FFFFFF;
+  text-transform: inherit;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#epdfauixxi .gt_first_grand_summary_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-top-style: double;
+  border-top-width: 6px;
+  border-top-color: #D3D3D3;
+}
+
+#epdfauixxi .gt_striped {
+  background-color: rgba(128, 128, 128, 0.05);
+}
+
+#epdfauixxi .gt_table_body {
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+}
+
+#epdfauixxi .gt_footnotes {
+  color: #333333;
+  background-color: #FFFFFF;
+  border-bottom-style: none;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+}
+
+#epdfauixxi .gt_footnote {
+  margin: 0px;
+  font-size: 90%;
+  padding: 4px;
+}
+
+#epdfauixxi .gt_sourcenotes {
+  color: #333333;
+  background-color: #FFFFFF;
+  border-bottom-style: none;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+}
+
+#epdfauixxi .gt_sourcenote {
+  font-size: 90%;
+  padding: 4px;
+}
+
+#epdfauixxi .gt_left {
+  text-align: left;
+}
+
+#epdfauixxi .gt_center {
+  text-align: center;
+}
+
+#epdfauixxi .gt_right {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+#epdfauixxi .gt_font_normal {
+  font-weight: normal;
+}
+
+#epdfauixxi .gt_font_bold {
+  font-weight: bold;
+}
+
+#epdfauixxi .gt_font_italic {
+  font-style: italic;
+}
+
+#epdfauixxi .gt_super {
+  font-size: 65%;
+}
+
+#epdfauixxi .gt_footnote_marks {
+  font-style: italic;
+  font-size: 65%;
+}
+</style>
+<div id="epdfauixxi" style="overflow-x:auto;overflow-y:auto;width:auto;height:auto;"><table class="gt_table">
+  
+  <thead class="gt_col_headings">
+    <tr>
+      <th class="gt_col_heading gt_columns_bottom_border gt_left" rowspan="1" colspan="1">TrueName</th>
+      <th class="gt_col_heading gt_columns_bottom_border gt_left" rowspan="1" colspan="1">BorrowerCity</th>
+      <th class="gt_col_heading gt_columns_bottom_border gt_right" rowspan="1" colspan="1">levdist</th>
+    </tr>
+  </thead>
+  <tbody class="gt_table_body">
+    <tr>
+      <td class="gt_row gt_left">PHILADELPHIA</td>
+      <td class="gt_row gt_left">P;LAINFIELD</td>
+      <td class="gt_row gt_right">9</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PHILADELPHIA</td>
+      <td class="gt_row gt_left">PA</td>
+      <td class="gt_row gt_right">10</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PHILADELPHIA</td>
+      <td class="gt_row gt_left">PA  17901</td>
+      <td class="gt_row gt_right">10</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PHILADELPHIA</td>
+      <td class="gt_row gt_left">PA 15459</td>
+      <td class="gt_row gt_right">10</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PHILADELPHIA</td>
+      <td class="gt_row gt_left">PA 16648</td>
+      <td class="gt_row gt_right">10</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PHILADELPHIA</td>
+      <td class="gt_row gt_left">PA 17013</td>
+      <td class="gt_row gt_right">10</td>
+    </tr>
+  </tbody>
+  
+  
+</table></div>
+<p>I would expect to see two modes for the distances, one with very low distances for words that are mispelled and one with longer distances for words that are clearly not Philadelphia and this is exactly what we get:</p>
+<pre class="r"><code>df_lev %&gt;% 
+  ggplot(aes(levdist)) + geom_bar()</code></pre>
+<p><img src="{{< blogdown/postref >}}index_files/figure-html/unnamed-chunk-5-1.png" width="672" /></p>
+<p>It might look like a natural cut off here is anything with a distance above 5. Let’s take a look at what is happening at this boundaary and see if we can validate this.</p>
+<pre class="r"><code>df_lev %&gt;% 
+  filter(between(levdist, 4, 9)) %&gt;% 
+  arrange(levdist) %&gt;% 
+  select(-TrueName) %&gt;% 
+  gt::gt()</code></pre>
+<style>html {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', 'Fira Sans', 'Droid Sans', Arial, sans-serif;
+}
+
+#lwwuzuljhz .gt_table {
+  display: table;
+  border-collapse: collapse;
+  margin-left: auto;
+  margin-right: auto;
+  color: #333333;
+  font-size: 16px;
+  font-weight: normal;
+  font-style: normal;
+  background-color: #FFFFFF;
+  width: auto;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #A8A8A8;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #A8A8A8;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+}
+
+#lwwuzuljhz .gt_heading {
+  background-color: #FFFFFF;
+  text-align: center;
+  border-bottom-color: #FFFFFF;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+}
+
+#lwwuzuljhz .gt_title {
+  color: #333333;
+  font-size: 125%;
+  font-weight: initial;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  border-bottom-color: #FFFFFF;
+  border-bottom-width: 0;
+}
+
+#lwwuzuljhz .gt_subtitle {
+  color: #333333;
+  font-size: 85%;
+  font-weight: initial;
+  padding-top: 0;
+  padding-bottom: 4px;
+  border-top-color: #FFFFFF;
+  border-top-width: 0;
+}
+
+#lwwuzuljhz .gt_bottom_border {
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+}
+
+#lwwuzuljhz .gt_col_headings {
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+}
+
+#lwwuzuljhz .gt_col_heading {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: normal;
+  text-transform: inherit;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: bottom;
+  padding-top: 5px;
+  padding-bottom: 6px;
+  padding-left: 5px;
+  padding-right: 5px;
+  overflow-x: hidden;
+}
+
+#lwwuzuljhz .gt_column_spanner_outer {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: normal;
+  text-transform: inherit;
+  padding-top: 0;
+  padding-bottom: 0;
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+#lwwuzuljhz .gt_column_spanner_outer:first-child {
+  padding-left: 0;
+}
+
+#lwwuzuljhz .gt_column_spanner_outer:last-child {
+  padding-right: 0;
+}
+
+#lwwuzuljhz .gt_column_spanner {
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  vertical-align: bottom;
+  padding-top: 5px;
+  padding-bottom: 6px;
+  overflow-x: hidden;
+  display: inline-block;
+  width: 100%;
+}
+
+#lwwuzuljhz .gt_group_heading {
+  padding: 8px;
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  text-transform: inherit;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: middle;
+}
+
+#lwwuzuljhz .gt_empty_group_heading {
+  padding: 0.5px;
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  vertical-align: middle;
+}
+
+#lwwuzuljhz .gt_from_md > :first-child {
+  margin-top: 0;
+}
+
+#lwwuzuljhz .gt_from_md > :last-child {
+  margin-bottom: 0;
+}
+
+#lwwuzuljhz .gt_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  margin: 10px;
+  border-top-style: solid;
+  border-top-width: 1px;
+  border-top-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 1px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 1px;
+  border-right-color: #D3D3D3;
+  vertical-align: middle;
+  overflow-x: hidden;
+}
+
+#lwwuzuljhz .gt_stub {
+  color: #333333;
+  background-color: #FFFFFF;
+  font-size: 100%;
+  font-weight: initial;
+  text-transform: inherit;
+  border-right-style: solid;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+  padding-left: 12px;
+}
+
+#lwwuzuljhz .gt_summary_row {
+  color: #333333;
+  background-color: #FFFFFF;
+  text-transform: inherit;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#lwwuzuljhz .gt_first_summary_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+}
+
+#lwwuzuljhz .gt_grand_summary_row {
+  color: #333333;
+  background-color: #FFFFFF;
+  text-transform: inherit;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+}
+
+#lwwuzuljhz .gt_first_grand_summary_row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  padding-left: 5px;
+  padding-right: 5px;
+  border-top-style: double;
+  border-top-width: 6px;
+  border-top-color: #D3D3D3;
+}
+
+#lwwuzuljhz .gt_striped {
+  background-color: rgba(128, 128, 128, 0.05);
+}
+
+#lwwuzuljhz .gt_table_body {
+  border-top-style: solid;
+  border-top-width: 2px;
+  border-top-color: #D3D3D3;
+  border-bottom-style: solid;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+}
+
+#lwwuzuljhz .gt_footnotes {
+  color: #333333;
+  background-color: #FFFFFF;
+  border-bottom-style: none;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+}
+
+#lwwuzuljhz .gt_footnote {
+  margin: 0px;
+  font-size: 90%;
+  padding: 4px;
+}
+
+#lwwuzuljhz .gt_sourcenotes {
+  color: #333333;
+  background-color: #FFFFFF;
+  border-bottom-style: none;
+  border-bottom-width: 2px;
+  border-bottom-color: #D3D3D3;
+  border-left-style: none;
+  border-left-width: 2px;
+  border-left-color: #D3D3D3;
+  border-right-style: none;
+  border-right-width: 2px;
+  border-right-color: #D3D3D3;
+}
+
+#lwwuzuljhz .gt_sourcenote {
+  font-size: 90%;
+  padding: 4px;
+}
+
+#lwwuzuljhz .gt_left {
+  text-align: left;
+}
+
+#lwwuzuljhz .gt_center {
+  text-align: center;
+}
+
+#lwwuzuljhz .gt_right {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+#lwwuzuljhz .gt_font_normal {
+  font-weight: normal;
+}
+
+#lwwuzuljhz .gt_font_bold {
+  font-weight: bold;
+}
+
+#lwwuzuljhz .gt_font_italic {
+  font-style: italic;
+}
+
+#lwwuzuljhz .gt_super {
+  font-size: 65%;
+}
+
+#lwwuzuljhz .gt_footnote_marks {
+  font-style: italic;
+  font-size: 65%;
+}
+</style>
+<div id="lwwuzuljhz" style="overflow-x:auto;overflow-y:auto;width:auto;height:auto;"><table class="gt_table">
+  
+  <thead class="gt_col_headings">
+    <tr>
+      <th class="gt_col_heading gt_columns_bottom_border gt_left" rowspan="1" colspan="1">BorrowerCity</th>
+      <th class="gt_col_heading gt_columns_bottom_border gt_right" rowspan="1" colspan="1">levdist</th>
+    </tr>
+  </thead>
+  <tbody class="gt_table_body">
+    <tr>
+      <td class="gt_row gt_left">PHILADEL</td>
+      <td class="gt_row gt_right">4</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PHILADELPHIA, PA</td>
+      <td class="gt_row gt_right">4</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PHILADELPHIAPHIA</td>
+      <td class="gt_row gt_right">4</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PHILAD</td>
+      <td class="gt_row gt_right">6</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PHILLA</td>
+      <td class="gt_row gt_right">6</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PHILA</td>
+      <td class="gt_row gt_right">7</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PHILA.</td>
+      <td class="gt_row gt_right">7</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PHILLY</td>
+      <td class="gt_row gt_right">7</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PALMYRA</td>
+      <td class="gt_row gt_right">8</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PAOLI</td>
+      <td class="gt_row gt_right">8</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PENNDEL</td>
+      <td class="gt_row gt_right">8</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PETROLIA</td>
+      <td class="gt_row gt_right">8</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PHIL</td>
+      <td class="gt_row gt_right">8</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PHILIPSBURG</td>
+      <td class="gt_row gt_right">8</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PHILLIPSBURG</td>
+      <td class="gt_row gt_right">8</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PILLOW</td>
+      <td class="gt_row gt_right">8</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PLUM PA</td>
+      <td class="gt_row gt_right">8</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PRICEDALE</td>
+      <td class="gt_row gt_right">8</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PULASKI</td>
+      <td class="gt_row gt_right">8</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">P;LAINFIELD</td>
+      <td class="gt_row gt_right">9</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PALM</td>
+      <td class="gt_row gt_right">9</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PALMER</td>
+      <td class="gt_row gt_right">9</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PALMERTON</td>
+      <td class="gt_row gt_right">9</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PARADISE</td>
+      <td class="gt_row gt_right">9</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PARIS</td>
+      <td class="gt_row gt_right">9</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PARKHILL</td>
+      <td class="gt_row gt_right">9</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PAUPACK</td>
+      <td class="gt_row gt_right">9</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PAYMYRA</td>
+      <td class="gt_row gt_right">9</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PEACH</td>
+      <td class="gt_row gt_right">9</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PENFIELD</td>
+      <td class="gt_row gt_right">9</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PENLLYN</td>
+      <td class="gt_row gt_right">9</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PENNDALE</td>
+      <td class="gt_row gt_right">9</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PENNSDALE</td>
+      <td class="gt_row gt_right">9</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PENNSYLVANIA</td>
+      <td class="gt_row gt_right">9</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PEQEUA</td>
+      <td class="gt_row gt_right">9</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PEQUEA</td>
+      <td class="gt_row gt_right">9</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PERKASI</td>
+      <td class="gt_row gt_right">9</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PERKASIE</td>
+      <td class="gt_row gt_right">9</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PHI</td>
+      <td class="gt_row gt_right">9</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PHONE</td>
+      <td class="gt_row gt_right">9</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PIITSBURGH</td>
+      <td class="gt_row gt_right">9</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PINEVILLE</td>
+      <td class="gt_row gt_right">9</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PITSBURGH</td>
+      <td class="gt_row gt_right">9</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PITTBURGH</td>
+      <td class="gt_row gt_right">9</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PITTSBRGH</td>
+      <td class="gt_row gt_right">9</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PITTSBUGH</td>
+      <td class="gt_row gt_right">9</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PITTSBURH</td>
+      <td class="gt_row gt_right">9</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PLAINFIELD</td>
+      <td class="gt_row gt_right">9</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PLAINS</td>
+      <td class="gt_row gt_right">9</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PLAINS / PA</td>
+      <td class="gt_row gt_right">9</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PLAINS TWP</td>
+      <td class="gt_row gt_right">9</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PLYMOUTH</td>
+      <td class="gt_row gt_right">9</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PORTAGE</td>
+      <td class="gt_row gt_right">9</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">POYNTELLE</td>
+      <td class="gt_row gt_right">9</td>
+    </tr>
+    <tr>
+      <td class="gt_row gt_left">PRINGLE</td>
+      <td class="gt_row gt_right">9</td>
+    </tr>
+  </tbody>
+  
+  
+</table></div>
+<p>Here we can see that it is actually a good match for up to and including a distance of 7. Even then Phil with a distance of 8 is probably a match. That 5 is not a perfect break off, is unfortunate. If it was it would suggest that a clustering algorithm to automatically grab both clusters would be incredibly accurate. Matches above 5 though means that we would have a few errors if we took such an approach. Whether we can accept this level of inaccuracy depends on our needs. But if not and a high level of accuracy is needed we might need to do what we have done here and actually manually set the boundary as well as include exceptions.</p>
